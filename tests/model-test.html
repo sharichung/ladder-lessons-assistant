@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model test</title>
+<style>
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f6f7fb; color: #1d2433; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  section { background: #fff; border: 1px solid #e3e7ee; border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #1f5f8b; background: #1f5f8b; color: #fff; cursor: pointer; margin: 4px 6px 4px 0; }
+  button.secondary { background: #fff; color: #1f5f8b; }
+  button:disabled { opacity: .45; cursor: default; }
+  .bar { height: 10px; background: #e3e7ee; border-radius: 99px; overflow: hidden; margin: 8px 0; }
+  .bar span { display: block; height: 100%; width: 0; background: #1f5f8b; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; border-bottom: 1px solid #eef0f4; padding: 6px; }
+  td code { font-size: 12px; word-break: break-all; }
+  .pass { color: #1e7a46; font-weight: 700; } .fail { color: #b3261e; font-weight: 700; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+  dt { color: #5b6475; } dd { margin: 0; }
+  pre { white-space: pre-wrap; font-size: 12px; background: #f4f6f9; padding: 8px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ladder Lessons game finder · model test</h1>
+  <p>Runs the 15 fixed questions through the real on-device model, using the same code as the widget. Use desktop Chrome. Serve the repo with <code>npm run serve</code> and open <code>http://localhost:8080/tests/model-test.html</code>.</p>
+
+  <section>
+    <h2>1. This device</h2>
+    <dl id="device"><dt>Checking…</dt><dd></dd></dl>
+  </section>
+
+  <section>
+    <h2>2. Load the model</h2>
+    <p id="load-note">The first run downloads the model once. Reload the page and press the button again to measure a cached start.</p>
+    <button id="load" disabled>Load model</button>
+    <div class="bar"><span id="bar"></span></div>
+    <p id="load-status"></p>
+  </section>
+
+  <section>
+    <h2>3. Run the 15 questions</h2>
+    <button id="run" disabled>Run tests</button>
+    <button id="copy" class="secondary" disabled>Copy report</button>
+    <dl id="summary"></dl>
+    <table>
+      <thead><tr><th>#</th><th>Question</th><th>Model output</th><th>Shown</th><th>Source</th><th>ms</th><th>Check</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+  <section>
+    <h2>Engine stats</h2>
+    <pre id="stats">–</pre>
+  </section>
+</main>
+
+<script src="../dist/ll-assistant/ll-assistant.js" data-no-ui></script>
+<script>
+(async function () {
+  var A = window.LLAssistant, core = A.core, X = A.internals;
+  var BASE = '../dist/ll-assistant/';
+  var $ = function (id) { return document.getElementById(id); };
+  var report = { device: {}, load: {}, questions: [], summary: {} };
+
+  var cat = core.prepareCatalogue(await (await fetch(BASE + 'catalogue.compact.json')).json());
+  var questions = (await (await fetch('questions.json')).json()).questions;
+  var realUrls = new Set(cat.games.map(function (g) { return g.url; }));
+
+  function row(dl, k, v) { var dt = document.createElement('dt'); dt.textContent = k; var dd = document.createElement('dd'); dd.textContent = v; dl.appendChild(dt); dl.appendChild(dd); }
+
+  // ---- device ----
+  var dev = await X.checkDevice();
+  var info = {};
+  try { var ad = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); if (ad && ad.info) info = { vendor: ad.info.vendor, architecture: ad.info.architecture, description: ad.info.description }; } catch (e) {}
+  report.device = { check: dev, gpu: info, deviceMemoryGB: navigator.deviceMemory || null, cores: navigator.hardwareConcurrency || null, userAgent: navigator.userAgent };
+  $('device').textContent = '';
+  row($('device'), 'Widget decision', dev.ok ? 'AI offered' : 'Keyword fallback (' + dev.reason + ')');
+  row($('device'), 'GPU', [info.vendor, info.architecture, info.description].filter(Boolean).join(' · ') || 'unknown');
+  row($('device'), 'Memory (browser-reported)', navigator.deviceMemory ? navigator.deviceMemory + ' GB (Chrome caps this at 8)' : 'not reported');
+  row($('device'), 'User agent', navigator.userAgent);
+  row($('device'), 'Model', cat.model.id + ' · WebLLM estimate of GPU memory: ' + Math.round(cat.model.vram_mb) + ' MB');
+
+  var cachedBefore = await X.isModelCached(cat.model);
+  var bytes = null;
+  try { bytes = await X.modelDownloadBytes(cat.model); } catch (e) { $('load-status').textContent = 'Could not reach the model host: ' + e.message; }
+  $('load').textContent = cachedBefore ? 'Start model (already downloaded)' : 'Download model · ' + (bytes ? X.toMB(bytes) + ' MB' : '? MB') + ' · one-time download';
+  $('load').disabled = !dev.ok && !confirm('The widget would NOT offer the AI on this device (' + dev.reason + '). Try loading anyway?');
+
+  var client = null;
+  $('load').onclick = async function () {
+    $('load').disabled = true;
+    client = X.createModelClient(BASE, cat.model.id);
+    var t0 = performance.now();
+    try {
+      await client.start(function (p, text) { $('bar').style.width = Math.round(p * 100) + '%'; $('load-status').textContent = text || ''; });
+    } catch (e) { $('load-status').textContent = 'Load failed: ' + e.message; report.load.error = e.message; return; }
+    var ms = Math.round(performance.now() - t0);
+    var measured = await cachedBytes();
+    report.load = { fromCache: cachedBefore, ms: ms, downloadBytesMeasured: measured, downloadMBMeasured: X.toMB(measured), downloadMBShownOnButton: bytes ? X.toMB(bytes) : null };
+    $('load-status').textContent = (cachedBefore ? 'Started from cache' : 'Downloaded and started') + ' in ' + (ms / 1000).toFixed(1) + ' s. Size in browser cache: ' + X.toMB(measured) + ' MB.';
+    $('run').disabled = false;
+  };
+
+  async function cachedBytes() {
+    var total = 0;
+    for (var name of ['webllm/model', 'webllm/config', 'webllm/wasm']) {
+      if (!(await caches.has(name))) continue;
+      var c = await caches.open(name);
+      for (var req of await c.keys()) {
+        if (req.url.indexOf(cat.model.id) < 0 && req.url !== cat.model.lib) continue;
+        var r = await c.match(req); total += (await r.blob()).size;
+      }
+    }
+    return total;
+  }
+
+  $('run').onclick = async function () {
+    $('run').disabled = true;
+    $('rows').textContent = '';
+    report.questions = [];
+    var firstAnswerMs = null, times = [], invalid = 0, called = 0, aiHits = 0, rulesHits = 0, onTopic = 0, badLinks = 0;
+    for (var i = 0; i < questions.length; i++) {
+      var q = questions[i], rec = { id: q.id, text: q.text };
+      if (!q.text.trim()) { rec.result = 'nothing sent (empty)'; rec.ok = true; report.questions.push(rec); addRow(i, q, rec); continue; }
+      var rules = core.recommendRules(cat, q.text);
+      var t0 = performance.now(), res;
+      try { res = await core.recommendAI(cat, client, q.text, { timeoutMs: 60000 }); }
+      catch (e) { res = core.recommendRules(cat, q.text); res.crash = e.message; }
+      var ms = Math.round(performance.now() - t0);
+      var calledModel = res.raw !== undefined || res.crash;
+      if (calledModel) { called++; times.push(ms); if (firstAnswerMs === null) firstAnswerMs = ms; }
+      if (res.modelInvalid || res.crash) invalid++;
+      var links = (res.ids || []).map(function (id) { return cat.byId[id] && cat.byId[id].url; });
+      links.forEach(function (u) { if (!realUrls.has(u)) badLinks++; });
+      var hit = q.anyOf ? (res.ids || []).some(function (id) { return q.anyOf.indexOf(id) >= 0; }) : null;
+      var rHit = q.anyOf ? rules.ids.some(function (id) { return q.anyOf.indexOf(id) >= 0; }) : null;
+      if (q.anyOf) { onTopic++; if (hit) aiHits++; if (rHit) rulesHits++; }
+      var ok = links.every(function (u) { return realUrls.has(u); }) && (q.expect === 'none' ? res.kind === 'none' : (res.kind === 'ask' || hit));
+      Object.assign(rec, { kind: res.kind, source: res.source, raw: res.raw || null, crash: res.crash || null, ids: res.ids || [], question: res.question || null, ms: ms, calledModel: !!calledModel, hitExpected: hit, rulesIds: rules.ids, rulesHitExpected: rHit, ok: ok });
+      report.questions.push(rec);
+      addRow(i, q, rec);
+    }
+    times.sort(function (a, b) { return a - b; });
+    var stats = await client.stats();
+    $('stats').textContent = stats || '–';
+    report.summary = {
+      renderedLinksNotInCatalogue: badLinks,
+      modelCalls: called,
+      modelInvalidOrCrashed: invalid,
+      timeToFirstAnswerMs: firstAnswerMs,
+      medianAnswerMs: times.length ? times[Math.floor(times.length / 2)] : null,
+      expectedGameHit: { ai: aiHits + '/' + onTopic, rules: rulesHits + '/' + onTopic },
+      jsHeapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 'not reported (Chrome only)',
+      gpuMemoryEstimateMB: Math.round(cat.model.vram_mb),
+      engineStats: stats,
+    };
+    var pass = badLinks === 0 && invalid === 0 && aiHits >= rulesHits;
+    report.summary.verdict = pass ? 'PASS' : 'FAIL';
+    var s = $('summary'); s.textContent = '';
+    row(s, 'Verdict', report.summary.verdict + '  (0 bad links, 0 invalid model replies, AI hits ≥ keyword hits)');
+    row(s, 'Rendered links not in catalogue', String(badLinks));
+    row(s, 'Model replies invalid or crashed', invalid + ' of ' + called);
+    row(s, 'Expected game in picks', 'AI ' + aiHits + '/' + onTopic + ' · keyword ' + rulesHits + '/' + onTopic);
+    row(s, 'Time to first answer', firstAnswerMs != null ? (firstAnswerMs / 1000).toFixed(2) + ' s' : '–');
+    row(s, 'Median answer time', report.summary.medianAnswerMs != null ? (report.summary.medianAnswerMs / 1000).toFixed(2) + ' s' : '–');
+    row(s, 'Model load', report.load.ms ? (report.load.ms / 1000).toFixed(1) + ' s' + (report.load.fromCache ? ' (from cache)' : ' (download + start)') : '–');
+    row(s, 'Download size (measured in cache)', report.load.downloadMBMeasured ? report.load.downloadMBMeasured + ' MB (button said ' + report.load.downloadMBShownOnButton + ' MB)' : '–');
+    row(s, 'Memory', 'Page JS heap: ' + report.summary.jsHeapMB + ' MB. GPU: WebLLM estimate ' + report.summary.gpuMemoryEstimateMB + ' MB. For the real figure open Chrome menu › More tools › Task manager and read the "GPU Process" memory row.');
+    $('copy').disabled = false;
+    $('run').disabled = false;
+  };
+
+  function addRow(i, q, rec) {
+    var tr = document.createElement('tr');
+    var cells = [String(i + 1), q.text || '(empty)', rec.raw || rec.crash || '', (rec.ids || []).join('\n') || rec.question || rec.result || rec.kind, rec.source || '', rec.ms != null ? String(rec.ms) : '', rec.ok ? 'PASS' : 'FAIL'];
+    cells.forEach(function (c, j) {
+      var td = document.createElement('td');
+      if (j === 2) { var code = document.createElement('code'); code.textContent = c; td.appendChild(code); } else td.textContent = c;
+      if (j === 6) td.className = rec.ok ? 'pass' : 'fail';
+      tr.appendChild(td);
+    });
+    $('rows').appendChild(tr);
+  }
+
+  $('copy').onclick = function () {
+    var text = JSON.stringify(report, null, 2);
+    navigator.clipboard.writeText(text).then(function () { $('copy').textContent = 'Copied'; }, function () { var w = window.open(); w.document.body.innerText = text; });
+  };
+})();
+</script>
+</body>
+</html>

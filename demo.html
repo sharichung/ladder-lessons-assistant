@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game finder demo</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f6f7fb; color: #1d2433; }
+  header { background: #fff; border-bottom: 1px solid #e3e7ee; padding: 16px; }
+  header h1 { margin: 0; font-size: 20px; }
+  main { max-width: 960px; margin: 0 auto; padding: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .tile { background: #fff; border: 1px solid #e3e7ee; border-radius: 12px; padding: 14px; }
+  .tile h3 { margin: 0 0 4px; font-size: 16px; }
+  .tile p { margin: 0; font-size: 14px; color: #5b6475; }
+  .tools { background: #fffbe8; border: 1px solid #f0dc8c; border-radius: 12px; padding: 12px 14px; margin: 0 0 16px; font-size: 14px; }
+  .tools h2 { margin: 0 0 6px; font-size: 15px; }
+  .tools button, .tools a { font: inherit; margin: 4px 6px 4px 0; }
+  .tools pre { margin: 8px 0 0; white-space: pre-wrap; font-size: 12.5px; background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 8px; max-height: 160px; overflow: auto; }
+  #email-gate { position: fixed; inset: 0; background: rgba(20,30,50,.55); display: flex; align-items: center; justify-content: center; }
+  #email-gate[hidden] { display: none; }
+  #email-gate .box { background: #fff; border-radius: 14px; padding: 24px; max-width: 360px; margin: 16px; }
+</style>
+<!-- Same as on the live site: a page that already has analytics. Here gtag only logs to the panel. -->
+<script>
+  window.__events = [];
+  window.gtag = function () {
+    var a = Array.prototype.slice.call(arguments);
+    window.__events.push(a);
+    var out = document.getElementById('events');
+    if (out) out.textContent += JSON.stringify(a) + '\n';
+  };
+</script>
+</head>
+<body>
+<header><h1>Ladder Lessons · demo library page</h1></header>
+<main>
+  <section class="tools" aria-label="Test controls">
+    <h2>Test controls (demo only, not part of the widget)</h2>
+    <button type="button" id="check">Check this device</button>
+    <a href="?llai=off">Reload in keyword-only mode</a>
+    <a href="?">Reload normally</a>
+    <button type="button" id="reset">Delete the downloaded AI from this browser</button>
+    <button type="button" id="gate">Show the email gate</button>
+    <pre id="device">Device check: not run yet.</pre>
+    <pre id="events">Analytics events (anonymous counts only):
+</pre>
+  </section>
+
+  <div class="grid">
+    <div class="tile"><h3>Ladder Phonics</h3><p>Phonics · Free</p></div>
+    <div class="tile"><h3>Telling the Time</h3><p>Everyday English · Free</p></div>
+    <div class="tile"><h3>Quick Fire Flashcards</h3><p>Speaking · Free</p></div>
+    <div class="tile"><h3>Big Text</h3><p>Classroom Tools · Free</p></div>
+  </div>
+</main>
+
+<div id="email-gate" hidden>
+  <div class="box">
+    <h2>Email gate (mock)</h2>
+    <p>The widget hides itself while this is on screen, because the script tag has <code>data-avoid="#email-gate"</code>.</p>
+    <button type="button" id="gate-close">Close</button>
+  </div>
+</div>
+
+<!-- The only line the live site needs: -->
+<script src="dist/ll-assistant/ll-assistant.js" defer data-avoid="#email-gate"></script>
+
+<script>
+  document.getElementById('check').onclick = function () {
+    var out = document.getElementById('device');
+    out.textContent = 'Checking…';
+    LLAssistant.internals.checkDevice().then(function (r) {
+      var lines = ['Device check: ' + (r.ok ? 'can run the AI' : 'keyword matching only') + ' (' + r.reason + ')',
+        'navigator.gpu: ' + !!navigator.gpu, 'deviceMemory: ' + (navigator.deviceMemory || 'not reported'), 'userAgent: ' + navigator.userAgent];
+      out.textContent = lines.join('\n');
+    });
+  };
+  document.getElementById('reset').onclick = function () {
+    Promise.all(['webllm/model', 'webllm/config', 'webllm/wasm'].map(function (n) { return caches.delete(n); })).then(function () {
+      try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('ll-ai-') === 0) localStorage.removeItem(k); }); } catch (e) {}
+      document.getElementById('device').textContent = 'Deleted. Reload the page to test a first visit.';
+    });
+  };
+  document.getElementById('gate').onclick = function () { document.getElementById('email-gate').hidden = false; };
+  document.getElementById('gate-close').onclick = function () { document.getElementById('email-gate').hidden = true; };
+</script>
+</body>
+</html>
