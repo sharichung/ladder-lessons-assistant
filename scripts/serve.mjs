@@ -1,7 +1,7 @@
 // Tiny static server for local testing. WebGPU needs a secure context, and
 // http://localhost counts as one.
 //
-//   node scripts/serve.mjs          -> http://localhost:8080/demo.html
+//   node scripts/serve.mjs          -> http://localhost:8080/
 //   PORT=3000 node scripts/serve.mjs
 
 import http from 'node:http';
@@ -21,7 +21,7 @@ export function startServer(port = 8080, root = ROOT) {
     const url = new URL(req.url, 'http://localhost');
     let file = path.normalize(path.join(root, decodeURIComponent(url.pathname)));
     if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
-    if (url.pathname === '/') file = path.join(root, 'demo.html');
+    if (url.pathname === '/') file = path.join(root, 'index.html');
     fs.stat(file, (err, st) => {
       if (err || !st.isFile()) { res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found'); return; }
       res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });

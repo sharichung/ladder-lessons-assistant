@@ -9,6 +9,33 @@ It runs entirely in the visitor's browser. No API key, no backend, no cost per u
 
 ---
 
+## Quick start on a Mac (no Node needed)
+
+Open **Terminal** and paste these lines one at a time. The server must be started **inside the project folder**. Started anywhere else, every page is a 404.
+
+```bash
+cd ~
+git clone https://github.com/sharichung/ladder-lessons-assistant.git
+cd ladder-lessons-assistant
+python3 -m http.server 8080
+```
+
+Then open **http://localhost:8080/** in Chrome. It links to the demo page and the model test. Press `Ctrl + C` in Terminal to stop the server.
+
+Next time, you only need:
+
+```bash
+cd ~/ladder-lessons-assistant
+git pull
+python3 -m http.server 8080
+```
+
+- If `git` asks you to install the "command line developer tools", click Install, wait for it to finish, then run the `git clone` line again.
+- Without git, use GitHub › **Code** › **Download ZIP**. Unzip it, type `cd ` (with a space) in Terminal, drag the unzipped folder onto the Terminal window, press Enter, then run `python3 -m http.server 8080`.
+- `npm install` and `npm test` must also be run inside this folder.
+
+---
+
 ## What to deploy
 
 Deploy **one folder: `dist/ll-assistant/`**. Copy it as-is into the main site, for example to `/ll-assistant/`.
@@ -158,7 +185,7 @@ When `catalogue.json` changes, rebuild the same way. It stays the only source of
 ```bash
 npm install          # WebLLM 0.2.85 + playwright-core (dev only)
 npm test             # build + unit tests + browser tests (headless Chromium)
-npm run serve        # http://localhost:8080/demo.html
+npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 ```
 
 `npm test` needs a Chromium. It uses `$CHROME_PATH` if set, otherwise installed Google Chrome.
