@@ -233,7 +233,7 @@ test('Keyword mode (WebGPU off): page load, header, every fixed question, cards,
 
   // Each game button opens its catalogue URL, and only that.
   const lastPicks = (await page.evaluate(() => LLAssistant.internals.turns())).filter((t) => t.kind === 'picks').pop();
-  const buttons = lastBot(page).locator('button.ll-card-title, .ll-card .ll-chip');
+  const buttons = page.locator('#ll-assistant .ll-bot:has(.ll-card)').last().locator('button.ll-card-title, .ll-card .ll-chip');
   for (let i = 0; i < await buttons.count(); i++) await buttons.nth(i).click();
   const opened = await page.evaluate(() => window.__opened);
   assert.deepEqual(opened, lastPicks.ids.map((id) => URL_OF[id]));
@@ -590,28 +590,101 @@ test('Second visit: a fully cached model starts without a download click or down
 // ---------- fixes from the review round ----------
 
 const PAUSE = (b) => b.replace('defer data-avoid="#email-gate"', 'defer data-avoid="#email-gate" data-clarity="pause"');
-// Stand-in for a session recorder: page-level capture listeners, as Clarity binds them.
-const RECORDER = `window.__seen = {};
-  ['click','mousedown','mousemove','pointerdown','wheel','scroll','input','change','keydown','focus'].forEach(function (t) {
-    document.addEventListener(t, function (e) { var r = document.getElementById('ll-assistant'); if (r && e.target && e.target.nodeType && r.contains(e.target)) window.__seen[t] = (window.__seen[t] || 0) + 1; }, true);
+// Stand-in for a session recorder: page-level capture listeners on document,
+// as Clarity binds them. A window listener added before the widget counts what
+// really happened, so every "not seen" below is checked against "it fired".
+const RECORDER_TYPES = ['click', 'mousedown', 'mousemove', 'pointerdown', 'wheel', 'scroll', 'focus', 'input', 'change', 'keydown', 'keyup', 'keypress',
+  'beforeinput', 'textInput', 'compositionstart', 'compositionupdate', 'compositionend', 'select', 'cut', 'copy', 'paste', 'touchcancel',
+  'dragstart', 'drag', 'dragend', 'drop', 'selectionchange'];
+const TYPING = ['input', 'change', 'keydown', 'keyup', 'keypress', 'beforeinput', 'textInput', 'compositionstart', 'compositionupdate', 'compositionend', 'select', 'cut', 'copy', 'paste'];
+const RECORDER = `window.__seen = {}; window.__fired = {};
+  function __inWidget(t, e) {
+    var r = document.getElementById('ll-assistant'); if (!r) return false;
+    if (e.target && e.target.nodeType && r.contains(e.target)) return true;
+    var s = t === 'selectionchange' && document.getSelection();
+    return !!(s && (r.contains(s.anchorNode) || r.contains(s.focusNode)));
+  }
+  ${JSON.stringify(RECORDER_TYPES)}.forEach(function (t) {
+    window.addEventListener(t, function (e) { if (__inWidget(t, e)) window.__fired[t] = (window.__fired[t] || 0) + 1; }, true);
+    document.addEventListener(t, function (e) { if (__inWidget(t, e)) window.__seen[t] = (window.__seen[t] || 0) + 1; }, true);
   });`;
+
+// Everything a visitor can do inside the open widget: type, select, cut, copy,
+// paste, a Chinese input-method word, send, drag-select an answer, touch, drag, click, scroll.
+async function exerciseWidget(page, context) {
+  const input = page.locator('#ll-assistant .ll-input');
+  await input.click();
+  await page.keyboard.type('Primary 5 student vocabulary');
+  await page.keyboard.press('Control+A');
+  await page.keyboard.press('Control+C');
+  await page.keyboard.press('Control+X');
+  await page.keyboard.press('Control+V');
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Input.imeSetComposition', { text: '生', selectionStart: 1, selectionEnd: 1 });
+  await cdp.send('Input.insertText', { text: '生' });
+  await input.fill('Primary 5 student vocabulary');
+  await page.locator('#ll-assistant .ll-send').click();
+  await page.waitForFunction(() => document.querySelectorAll('#ll-assistant .ll-card').length > 0);
+  const box = await page.locator('#ll-assistant .ll-desc').first().boundingBox();
+  await page.mouse.move(box.x + 2, box.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height - 2, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  await page.locator('#ll-assistant .ll-title').evaluate((n) => {
+    ['touchcancel', 'dragstart', 'drag', 'dragend', 'drop'].forEach((t) => n.dispatchEvent(new Event(t, { bubbles: true })));
+  });
+  await page.locator('#ll-assistant .ll-card .ll-chip').first().click();
+  await page.mouse.move(1000, 600);
+  await page.mouse.wheel(0, 200);
+}
 
 test('Pause mode: no widget event reaches page-level listeners; mask mode still lets clicks through (7B)', async () => {
   for (const mode of ['pause', 'mask']) {
     const { context, page } = await newPage(mode === 'pause' ? { demoPatch: PAUSE } : {});
     await context.addInitScript(RECORDER);
     await openWidget(page);
-    await page.locator('#ll-assistant .ll-input').click();
-    await page.keyboard.type('Primary 5 student vocabulary');
-    await page.locator('#ll-assistant .ll-send').click();
-    await page.waitForFunction(() => document.querySelectorAll('#ll-assistant .ll-card').length > 0);
-    await page.locator('#ll-assistant .ll-card .ll-chip').first().click();
-    await page.mouse.move(1000, 600);
-    await page.mouse.wheel(0, 200);
-    const seen = await page.evaluate(() => window.__seen);
-    if (mode === 'pause') assert.deepEqual(seen, {}, 'pause mode: widget events seen by the page: ' + JSON.stringify(seen));
-    else { assert.ok(seen.click > 0, 'mask mode keeps clicks visible'); assert.ok(!seen.input && !seen.change && !seen.keydown, 'typing never visible'); }
+    await exerciseWidget(page, context);
+    const { seen, fired } = await page.evaluate(() => ({ seen: window.__seen, fired: window.__fired }));
+    for (const t of ['click', 'mousedown', 'pointerdown', 'keydown', 'keyup', 'keypress', 'beforeinput', 'textInput', 'input', 'select', 'cut', 'copy', 'paste', 'compositionstart', 'compositionend', 'touchcancel', 'dragstart', 'drop']) {
+      assert.ok(fired[t] > 0, `${mode}: the test really produced ${t}`);
+    }
+    if (mode === 'pause') {
+      assert.ok(fired.selectionchange > 0, 'pause: the test really changed the selection');
+      assert.deepEqual(seen, {}, 'pause mode: widget events seen by the page: ' + JSON.stringify(seen));
+    } else {
+      assert.ok(seen.click > 0, 'mask mode keeps clicks visible');
+      const typed = TYPING.filter((t) => seen[t]);
+      assert.deepEqual(typed, [], 'typing, selection and clipboard events never visible');
+    }
     assert.equal((await page.evaluate(() => window.__opened)).length, 1, `${mode}: the level button still opened its game`);
+    if (mode === 'pause') {
+      await page.locator('#ll-assistant .ll-close').click();
+      assert.equal(await page.evaluate(() => { const s = document.getSelection(); const r = document.getElementById('ll-assistant'); return !!(s && r.contains(s.anchorNode)); }), false, 'no selection left inside the widget after close');
+    }
+    await context.close();
+  }
+});
+
+test('Escape in a page field belongs to the page; Escape on the page or in the widget closes it', async () => {
+  for (const mode of ['pause', 'mask']) {
+    const { context, page } = await newPage(mode === 'pause' ? { demoPatch: PAUSE } : {});
+    await openWidget(page);
+    await page.evaluate(() => { const i = document.createElement('input'); i.id = 'hostinput'; document.body.prepend(i); });
+    await page.locator('#ll-assistant .ll-input').fill('a draft question about phonics');
+    await page.locator('#hostinput').click();
+    await page.keyboard.type('host query');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => LLAssistant.internals.state().open), true, `${mode}: still open`);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'hostinput', `${mode}: focus stays in the page field`);
+    assert.equal(await page.locator('#ll-assistant .ll-input').inputValue(), 'a draft question about phonics', `${mode}: draft kept`);
+    await page.evaluate(() => document.activeElement.blur());
+    await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => LLAssistant.internals.state().open), false, `${mode}: Escape on the page closes`);
+    await page.locator('#ll-assistant .ll-launcher').click();
+    await page.locator('#ll-assistant .ll-input').press('Escape');
+    assert.equal(await page.evaluate(() => LLAssistant.internals.state().open), false, `${mode}: Escape in the widget closes`);
+    assert.equal(await page.evaluate(() => document.activeElement.classList.contains('ll-launcher')), true, `${mode}: focus back on the launcher`);
     await context.close();
   }
 });
@@ -653,14 +726,42 @@ test('A failed catalogue load survives a language switch and the queued question
   await context.close();
 });
 
-test('A natural reply to "How old are they?" is understood', async () => {
+test('A natural reply to "How old are they?" is understood, in digits or words', async () => {
+  for (const [question, reply] of [['reading practice', "she's 9"], ['reading practice', 'nine'], ['reading practice', 'she is nine'], ['閱讀練習', '九'], ['閱讀練習', '佢今年九']]) {
+    const { context, page } = await newPage();
+    await openWidget(page);
+    let r = await ask(page, question);
+    assert.equal(r.turn.askType, 'age', question);
+    r = await ask(page, reply);
+    assert.equal(r.turn.askType, 'reading', `age taken from "${reply}"`);
+    assert.match(r.text, /There is no reading game yet|暫時未有閱讀遊戲/);
+    await context.close();
+  }
+});
+
+test('A typed age after picks shown without an age joins the earlier question', async () => {
   const { context, page } = await newPage();
   await openWidget(page);
-  let r = await ask(page, 'reading practice');
-  assert.equal(r.turn.askType, 'age');
-  r = await ask(page, "she's 9");
-  assert.equal(r.turn.askType, 'reading', 'age taken from the reply');
-  assert.match(r.text, /There is no reading game yet/);
+  const idsOf = (items) => items.flatMap((it) => it.ids || [it.id]);
+  for (const [question, reply, joined] of [
+    ['phonics', '7', 'phonics. Age 7'],
+    ['phonics', "she's 7", 'phonics. Age 7'],
+    ['phonics', 'Age 7', 'phonics. Age 7'],
+    ['speaking games', 'she is 12', 'speaking games. she is 12'],
+    ['拼讀', '7歲', '拼讀. 7歲'],
+  ]) {
+    let r = await ask(page, question);
+    assert.equal(r.turn.kind, 'picks', question);
+    assert.equal(await r.el.locator('.ll-chips .ll-chip').count(), 5, 'age chips shown');
+    r = await ask(page, reply);
+    const want = core.recommendRules(cat, joined);
+    assert.equal(r.turn.kind, 'picks', `"${reply}" after "${question}"`);
+    assert.deepEqual(idsOf(r.turn.items), idsOf(want.items), `"${reply}" after "${question}" answers "${joined}"`);
+  }
+  // A new question is not an age answer.
+  await ask(page, 'phonics');
+  const r = await ask(page, 'grammar');
+  assert.deepEqual(idsOf(r.turn.items), idsOf(core.recommendRules(cat, 'grammar').items));
   await context.close();
 });
 

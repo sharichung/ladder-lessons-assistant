@@ -47,7 +47,7 @@ Deploy **one folder: `dist/ll-assistant/`**. Copy it as-is into the main site, f
 
 | File | Size (gzip) | When it loads |
 |---|---|---|
-| `ll-assistant.js` | 78 KB (25 KB) | Page load, `defer` |
+| `ll-assistant.js` | 85 KB (28 KB) | Page load, `defer` |
 | `ll-assistant.css` | 12 KB (3 KB) | Page load, added by the script |
 | `catalogue.compact.json` | 41 KB (15 KB) | When the teacher opens the widget |
 | `ll-worker.js` | 3 KB | Only after the download click, or when the model is already cached |
@@ -133,10 +133,16 @@ Spaces and full stops don't matter: "P.5", "Primary5", "小 五", "小.5" and "F
 
 Other ways of writing ages and school years that are recognised:
 - Written-out numbers: "Form One", "Primary Five", "Sec 2", "小學三年級", "中學一年級".
-- Ages in words or other forms: "eight year old", "nine-year-old", "九歲", "七歲半", "9 y.o.", "Age: 9" and "my student is 9 years".
-  - "for 5 years" and "3 years of English" are not read as ages.
-- Two ages: "6 and 10 years old" becomes 6–10.
-- Phrases that are not school years: "其中一個" and "當中一個" (one of them) are not read as 中一.
+- Ages in words or other forms: "eight year old", "nine-year-old", "九歲", "七歲半", "9 y.o.", "Age: 9", "Age seven" and "my student is 9 years".
+- An age with no unit, after a word for the student: "She is 7", "my son is ten", "my student is 12".
+- Ranges: "6 and 10 years old", "kids from 5 to 7", "between 8 and 10", "students 6-7", "七至九歲", "七、八歲" and "seven to nine year olds". The youngest age is used.
+- 高中 and 初中 count as secondary, like 中學.
+- Not read as ages or school years:
+  - "for 5 years", "3 years of English", "studied English 3 years", "lived here 5 years": "N years" is an age only with old, 歲, age or "is"
+  - "其中一個" and "當中一個" (one of them) are not 中一
+  - "Year 2 university" is not a primary school year
+  - F1 the racing series ("loves F1", "F1 fan", "F1 迷") is not Form 1. With an adult or university word in the message, a Form/S/F year is ignored.
+- DSE gives 15–18 only when no Form, S or 中N year is given. So "Form 5 DSE" stays 16–17 and keeps IELTS Speaking Room.
 
 **Which age the filter uses:**
 - An exact age or school year uses the **youngest** age of its range. So Form 4 (15–16) does not get games with `age_min` 16.
@@ -153,7 +159,8 @@ Exception: when the teacher states an age under 13, "business" and "work" do not
 
 ### The answer
 
-**Number of games.** Under 30 minutes gives 1–2 games; 30 minutes or more gives 2–3; no length given gives up to 3. "1 hour 15 min" and "1小時15分鐘" count as 75 minutes.
+**Number of games.** Under 30 minutes gives 1–2 games; 30 minutes or more gives 2–3; no length given gives up to 3. "1 hour 15 min" and "1小時15分鐘" count as 75 minutes. Lengths in words work too: "forty-five minutes", "四十五分鐘", "two hours", "個半鐘" (90) and "quarter of an hour" (15).
+- The lesson length and phrases like "first time" are never matched as topics, so "30分鐘" does not bring up Telling the Time.
 - If the strong matches run out, the gap is filled in this order:
   - the next games of the same skill that pass the filters
   - other matching games
@@ -170,8 +177,8 @@ This applies in both modes. In AI mode, if the model leaves it out, the widget p
 **Ladder Vocabulary** takes one card, with a button for each level that fits the age and any stated level. For example, a P5 student gets A1 · A2 · B1, and "A2" gives only A2.
 
 **When the widget asks instead of answering:**
-- **An age, grade or level with no skill** ("Form 4 student", "Form 4 students", "中四生", "Any ideas for a Form 4 student?", "Adult, B2", "6歲 beginner"): one question, "Which skill?", with numbered choices 1) Speaking 2) Writing 3) Grammar 4) Vocabulary 5) Phonics 6) Listening, or 1) 口語 2) 寫作 3) 文法 4) 詞彙 5) 拼讀 6) 聽力 in Chinese. This happens only when the rest of the message is teaching words. "My 8 year old wants a pizza recipe" still gets the off-topic reply.
-- **Reading:**
+- **An age, grade or level with no skill** ("Form 4 student", "Form 4 students", "中四生", "Any ideas for a Form 4 student?", "Got anything for a 10 year old?", "請問有冇適合K2嘅遊戲？", "我聽日教個小三學生，有咩好玩？", "Adult, B2", "6歲 beginner"): one question, "Which skill?", with numbered choices 1) Speaking 2) Writing 3) Grammar 4) Vocabulary 5) Phonics 6) Listening, or 1) 口語 2) 寫作 3) 文法 4) 詞彙 5) 拼讀 6) 聽力 in Chinese. This happens only when the rest of the message is teaching words. "My 8 year old wants a pizza recipe" still gets the off-topic reply.
+- **Reading** (reading, 閱讀, 睇書, 看書; 讀書 about going to school, as in "喺國際學校讀書", does not count):
   - Under 8, reading means phonics.
   - From 8, the widget says there is no reading game yet and offers 1) Vocabulary 2) Grammar 3) Listening.
   - If the age range crosses 8, the youngest age decides.
@@ -190,7 +197,8 @@ This applies in both modes. In AI mode, if the model leaves it out, the widget p
 
 Adding words such as `business`, `work`, `商業` or `工作` to their keywords in the source would bring them in.
 
-**Short answers join the previous question.** A digit, a chip, or a reply that only gives an age ("she's 9", "9") or only gives a skill is added to the earlier question. A new full question starts fresh.
+**Short answers join the previous question.** A digit, a chip, or a reply that only gives an age ("she's 9", "9", "nine", "九", "佢今年九") or only gives a skill is added to the earlier question. A new full question starts fresh.
+- Games shown without an age come with the age buttons. Typing an age instead ("7", "she's 7", "7歲") also joins the earlier question. Any other reply starts fresh.
 
 ### AI mode
 
@@ -277,7 +285,7 @@ One language per conversation. It changes only when a message has Chinese charac
 
 **Microsoft Clarity (decision 7B: keep recording, remove every clue):**
 - The widget's root has `data-clarity-mask="true"`, so Clarity hides all text inside it. Clarity only checks that this attribute is present; the value doesn't matter.
-- Typing, change and key events stop at the widget, before Clarity's listeners. This matters because without it, Clarity uploads an encoded fingerprint (a hash) of the typed text when the text box loses focus. The browser tests run the real Clarity library to confirm the fingerprint no longer appears.
+- Typing events stop at the widget, before Clarity's listeners or any other page script: input, change, all key events, the browser's before-input and text-input events, Chinese input-method events, text selection in the text box, and cut, copy and paste. This matters because without it, Clarity uploads an encoded fingerprint (a hash) of the typed text when the text box loses focus. The browser tests run the real Clarity library to confirm the fingerprint no longer appears.
 - Games open from buttons, not links, so Clarity's click records carry no game address.
 - The widget's page code holds no game ids, sources or `lang` attributes. Plan colours come from a one-character code (`data-t="1|2|3"`), and class names never name a game, plan, skill or language.
 - Class names are the same for every kind of answer.
@@ -285,11 +293,13 @@ One language per conversation. It changes only when a message has Chinese charac
   - where clicks, mouse movement and scrolling happen inside the widget
   - the character count of each masked text, such as a card title or description
   - the page structure: how many cards, tags and buttons each answer has
+  - where text is selected inside the widget (which element and the position, not the text)
 
   Someone could match those counts against the catalogue to guess which games were shown. Typing itself is not recorded: input, change and key events never reach Clarity.
 - **For a stronger guarantee, add `data-clarity="pause"`** to the script tag:
   - Clarity pauses while the widget is open.
-  - Every mouse, touch, scroll, focus and click event inside the widget also stops before Clarity's listeners. The buttons still work, because the widget runs them itself.
+  - Every mouse, pointer, touch, scroll, focus, drag, click and text-selection event inside the widget also stops before Clarity's listeners. The buttons still work, because the widget runs them itself.
+  - On close, any text selected inside the widget is deselected before Clarity resumes.
   - On close, the conversation is cleared from the page and kept in memory. An answer that finishes after close is not drawn until the widget reopens. The send button and labels reset to the page's language before Clarity resumes.
   - Clarity then sees nothing from the open widget except that the launcher was clicked.
 - **After deploying, check both GA4 and Clarity:**
@@ -300,6 +310,8 @@ One language per conversation. It changes only when a message has Chinese charac
   - It never covers the characters the teacher types, because the text box and the teacher's own bubble use system fonts.
   - Rendering card text in system fonts too would close this. It would change decision B2, so I have not done it.
 - The widget never asks for a name, an email or anything about a specific child. It makes no security or certification claims.
+
+**Escape key:** Escape closes the widget when focus is in the widget or on the page itself. Escape in one of your page's own fields, such as a search box, is left to your page and the widget stays open with its draft. Focus goes back to the launcher only if it was in the widget.
 
 ---
 
@@ -340,10 +352,12 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 **Chromium:** `npm test` uses `$CHROME_PATH` if set, otherwise installed Google Chrome.
 
 **The question set:**
-- `tests/questions.json` has 93 fixed questions in English and Chinese. They cover every failing case from the test round plus the reviewers' edge cases:
+- `tests/questions.json` has 123 fixed questions in English and Chinese. They cover every failing case from the test round plus both review rounds' edge cases:
   - kids, adults, IELTS, DSE and Form 4
   - phonics, reading and vocabulary levels
-  - lesson lengths
+  - lesson lengths, in digits and in words
+  - ages without a unit, number-word ranges, university years, F1 racing, "studied English 3 years"
+  - request phrasings with an age but no skill
   - off-topic messages, with and without an age
   - prompt injection in English and Chinese
   - an empty message
@@ -389,17 +403,20 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
    - no typed-text fingerprint, game URL, game id, game title or typed word reaches the upload
    - a deliberate break, with the change-event blocker removed, makes this test fail
 4. **`data-clarity="pause"`:**
-   - paused while open, and no widget event reaches page-level listeners
+   - paused while open, and no widget event reaches page-level listeners: typing, keys, Chinese input, select, cut, copy, paste, clicks, mouse, touch cancel, drag, text selection and scroll. Each event is also counted before the widget, so the test proves it really happened.
+   - no selection is left inside the widget after close
    - the conversation is cleared before Clarity resumes
    - an answer arriving after close is not drawn
    - the send button resets
-   - in mask mode, clicks still reach Clarity but typing never does
+   - in mask mode, clicks still reach Clarity but typing, keys, selection in the text box and the clipboard never do
 5. **Language:** one language per conversation, earlier answers redrawn, "2" keeps Chinese.
 6. **Choices:** skill question, reading and "no game for this age" answered by click.
 7. **Narrow screens** (320, 375 and 768 px wide): panel fits, no sideways scroll, input and button on one row.
 8. **Review-round fixes:**
    - a failed catalogue load survives a language switch and is retried
-   - "she's 9" answers the age question
+   - "she's 9", "nine", "九" and "佢今年九" answer the age question
+   - a typed age after games shown without an age joins the earlier question; a new question does not
+   - Escape in a page field leaves the widget open with its draft; Escape on the page or in the widget closes it
    - the CTA buttons use the site padding exactly
 9. **Device and download:**
    - no `navigator.gpu`
@@ -411,7 +428,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 
 ### Before and after (E3)
 
-**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 28/92, after 92/92**. Full table: `tests/results/keyword-before-after.md`.
+**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 38/122, after 122/122**. Full table: `tests/results/keyword-before-after.md`.
 
 **AI mode (needs a real GPU):**
 1. Start the server.
@@ -452,7 +469,7 @@ To see a true first visit (the download button with nothing cached), use the dem
 
 | Measure | Value |
 |---|---|
-| Page-load cost | 2 requests: `ll-assistant.js` 25 KB gzip + `ll-assistant.css` 3 KB gzip. Layout shift 0. **Measured** in headless Chromium |
+| Page-load cost | 2 requests: `ll-assistant.js` 28 KB gzip + `ll-assistant.css` 3 KB gzip. Layout shift 0. **Measured** in headless Chromium |
 | Model download size | **Not measured yet.** `model-test.html` measures the real bytes in the cache |
 | Time to first answer on a mid-range laptop | **Not measured yet.** Needs a real GPU; run `model-test.html` |
 | Memory | ~945 MB GPU is **WebLLM's published estimate, not measured.** `model-test.html` says where to read the real figure |

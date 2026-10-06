@@ -143,8 +143,8 @@
 
   // Words that may surround an age, grade or level without naming a skill.
   // A message made only of these plus an age asks for the skill (A5).
-  var TEACH_EN = toSet('student students pupil pupils learner learners kid kids child children son daughter boy boys girl girls class classes group lesson lessons beginner beginners total complete absolute level levels hong kong hk local international school primary secondary sec form year grade age aged old years yo teach teaching tutor tutoring private one new adult adults teen teens teenage teenager teenagers preschool kindergarten nursery online english esl elementary intermediate advanced upper pre zero mine idea ideas suggestion suggestions suggest recommend recommendation recommendations something anything help practice practise extra fun play stuff she he her his him years-old'.split(' ').map(norm));
-  var TEACH_ZH = ['國際學校', '小朋友', '零基礎', '青少年', '幼稚園', '一對一', '學生', '細路', '兒子', '女兒', '初學', '初級', '程度', '香港', '本地', '學校', '成人', '大人', '中學', '小學', '新手', '入門', '啱啱', '開始', '補習', '英文', '上堂', '課堂', '我哋', '佢哋', '遊戲', '建議', '推介', '介紹', '有冇', '有無', '練習', '而家', '依家', '讀緊', '好玩', '可以', '邊啲', '什麼', '甚麼', '我', '佢', '嘅', '個', '有', '一', '班', '堂', '仔', '女', '學', '教', '的', '是', '係', '讀', '生', '位', '名', '同', '和', '咗', '緊', '剛', '歲', '咩', '乜', '啲', '俾', '畀', '玩', '想', '嗎', '呢', '吖', '啊', '呀', '喎', '嘛', '半'];
+  var TEACH_EN = toSet('student students pupil pupils learner learners kid kids child children son daughter boy boys girl girls class classes group lesson lessons beginner beginners total complete absolute level levels hong kong hk local international school primary secondary sec form year grade age aged old years yo teach teaching tutor tutoring private one new adult adults teen teens teenage teenager teenagers preschool kindergarten nursery online english esl elementary intermediate advanced upper pre zero mine idea ideas suggestion suggestions suggest recommend recommendation recommendations something anything help practice practise extra fun play stuff she he her his him years-old got use using tomorrow today tonight week weekend weekday monday tuesday wednesday thursday friday saturday sunday session sessions thanks thank hi hello lol'.split(' ').map(norm));
+  var TEACH_ZH = ['國際學校', '請問', '適合', '聽日', '今日', '明日', '明天', '今天', '星期', '禮拜', '今個', '下個', '週末', '周末', '今年', '小朋友', '零基礎', '青少年', '幼稚園', '一對一', '學生', '細路', '兒子', '女兒', '初學', '初級', '程度', '香港', '本地', '學校', '成人', '大人', '中學', '小學', '新手', '入門', '啱啱', '開始', '補習', '英文', '上堂', '課堂', '我哋', '佢哋', '遊戲', '建議', '推介', '介紹', '有冇', '有無', '練習', '而家', '依家', '讀緊', '讀書', '返學', '上學', '好玩', '可以', '邊啲', '什麼', '甚麼', '我', '佢', '嘅', '個', '有', '一', '班', '堂', '仔', '女', '學', '教', '的', '是', '係', '讀', '生', '位', '名', '同', '和', '咗', '緊', '剛', '歲', '咩', '乜', '啲', '俾', '畀', '玩', '想', '嗎', '呢', '吖', '啊', '呀', '喎', '嘛', '半', '新', '好', '用', '喺', '在'];
 
   // Teacher words that point to a skill (catalogue category id).
   var SKILL_WORDS = {
@@ -162,7 +162,13 @@
   // "reading" is not a catalogue skill: under 8 it means phonics, from 8 it
   // gets the closest skills as a choice (A6).
   var READING_EN = toSet(['read', 'reading', 'reader', 'comprehension'].map(norm));
-  var READING_ZH = ['閱讀理解', '閱讀', '讀書', '讀故事'];
+  var READING_ZH = ['閱讀理解', '閱讀', '讀故事', '睇書', '看書', '睇英文書', '看英文書'];
+  // 讀書 is reading, except "studies at a school" (喺國際學校讀書, 讀緊小四).
+  function readingZh(raw) {
+    if (READING_ZH.some(function (w) { return raw.indexOf(w) >= 0; })) return true;
+    var i = raw.indexOf('讀書');
+    return i >= 0 && !/校\s*$/.test(raw.slice(Math.max(0, i - 6), i)) && !/讀緊|讀[小中]/.test(raw);
+  }
 
   // Who the lesson is for, not what it is about. A hit on these does not count
   // as a topic match when deciding whether a free game goes first.
@@ -203,16 +209,37 @@
     var m = /^([一二兩三四五六七八九])?十([一二三四五六七八九])?$/.exec(s);
     return m ? (m[1] ? ZH_DIGIT[m[1]] : 1) * 10 + (m[2] ? ZH_DIGIT[m[2]] : 0) : null;
   }
-  var EN_NUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20 };
-  var EN_NUM_RE = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty';
+  var EN_UNITS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
+  var EN_TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+  var EN_NUM_RE = '(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[\\s-](?:one|two|three|four|five|six|seven|eight|nine))?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen';
+  // "forty-five" -> 45
+  function enNumber(w) {
+    var parts = w.split(/[\s-]+/);
+    if (parts.length === 2) return EN_TENS[parts[0]] + EN_UNITS[parts[1]];
+    return EN_TENS[w] || EN_UNITS[w] || null;
+  }
+  var ZH_NUM_RE = '[一二兩三四五六七八九十]{1,3}';
 
-  // Numbers written as words, only where they are an age or a school year:
-  // "eight year old", "Form One", "Primary Five", 九歲, 小學三年級, 中學一年級.
+  // Numbers written as words, only where they are an age, a school year or a
+  // lesson length: "eight year old", "seven to nine year olds", "Age seven",
+  // "she is nine", "Form One", "forty-five minutes", 九歲, 七至九歲, 四十五分鐘,
+  // 個半鐘, 小學三年級, 中學一年級.
   function normaliseNumbers(low) {
+    var W = '(' + EN_NUM_RE + ')';
+    var en = function (w) { var n = enNumber(w); return n != null ? String(n) : w; };
+    var zh = function (w) { var n = zhNumber(w); return n != null ? String(n) : w; };
     return low
-      .replace(new RegExp('\\b(' + EN_NUM_RE + ')(?=[\\s-]*(?:years?|yrs?)[\\s-]*olds?\\b|[\\s-]*y\\.?\\/?o\\b)', 'g'), function (w) { return String(EN_NUM[w]); })
-      .replace(new RegExp('\\b(form|primary|secondary|sec|year|grade)\\s+(' + EN_NUM_RE + ')\\b', 'g'), function (m, a, w) { return a + ' ' + EN_NUM[w]; })
-      .replace(/([一二兩三四五六七八九十]{1,3})(?=\s*歲)/g, function (m) { var n = zhNumber(m); return n != null ? String(n) : m; })
+      .replace(/\bquarter of an hour\b/g, '15 minutes')
+      .replace(new RegExp('\\b' + W + '(?=[\\s-]*(?:minutes?|mins?|hours?|hrs?)\\b)', 'g'), en)
+      .replace(new RegExp('\\b' + W + '(\\s*(?:to|and|-|–)\\s*)' + W + '(?=[\\s-]*(?:years?|yrs?)\\b|[\\s-]*y\\.?\\/?o\\b)', 'g'), function (m, a, sep, b) { return en(a) + sep + en(b); })
+      .replace(new RegExp('\\b' + W + '(?=[\\s-]*(?:years?|yrs?)[\\s-]*olds?\\b|[\\s-]*y\\.?\\/?o\\b)', 'g'), en)
+      .replace(new RegExp('\\b(age[sd]?|is|am|are|\'s|was|turns?|turning)(\\s*[:：]?\\s*)' + W + '\\b', 'g'), function (m, a, sp, w) { return a + sp + en(w); })
+      .replace(new RegExp('\\b(form|primary|secondary|sec|year|grade)\\s+(' + EN_NUM_RE + ')\\b', 'g'), function (m, a, w) { return a + ' ' + en(w); })
+      .replace(new RegExp('(' + ZH_NUM_RE + ')(?=\\s*(?:分鐘|分|小時|個鐘))', 'g'), zh)
+      .replace(/(^|[^一二兩三四五六七八九十\d])個半(?:鐘|小時)/g, '$1 90 分鐘')
+      .replace(new RegExp('(' + ZH_NUM_RE + ')(?=\\s*(?:至|到|、|同|和|及|-|–|~)\\s*(?:' + ZH_NUM_RE + '|\\d{1,2})\\s*歲)', 'g'), zh)
+      .replace(new RegExp('(' + ZH_NUM_RE + ')(?=\\s*歲)', 'g'), zh)
+      .replace(new RegExp('今年\\s*(' + ZH_NUM_RE + '|\\d{1,2})(?!\\s*(?:年級|月|日|號|歲|\\d))', 'g'), function (m, n) { return '今年 ' + zh(n) + '歲'; })
       .replace(/(小學|中學)\s*([一二三四五六1-6])\s*年級/g, function (m, a, n) { return (a === '小學' ? '小' : '中') + n; });
   }
 
@@ -245,22 +272,42 @@
     ['(\\d{1,2})\\s*\\+\\s*(?:years?|yrs?|歲)', function (m) { return [Number(m[1]), 150]; }],
     ['(\\d{1,2})\\s*歲\\s*(?:或)?以上', function (m) { return [Number(m[1]), 150]; }],
     ['(\\d{1,2})\\s*-?\\s*(?:years?[\\s-]*olds?|yrs?[\\s-]*olds?|y\\.?\\/?o\\b\\.?|歲)', function (m) { return [Number(m[1]), Number(m[1])]; }],
-    // "my student is 9 years", but not "for 5 years", "3 years of English" or "2 years ago"
-    ['(\\d{1,2})\\s*(?:years?|yrs?)\\b', function (m, before, after) {
-      if (/\b(for|of|since|about|over|than|last|past|next|in|within)\s*$/.test(before) || /^\s*(of|ago|experience|in|learning|studying|teaching|now)\b/.test(after)) return null;
-      return [Number(m[1]), Number(m[1])];
-    }],
     [AGE_WORD + '(\\d{1,2})\\b', function (m) { return [Number(m[1]), Number(m[1])]; }],
+    // "She is 7", "my son is 10", "she's 9 years": only after a word for the student,
+    // so "the class is 8 students" or "I have lived here 5 years" are not ages.
+    ['\\b(?:is|am|are|\'s|was|turns?|turning)\\s+(\\d{1,2})(?![0-9])', function (m, before, after) {
+      var n = Number(m[1]);
+      if (n < 3 || n > 19) return null;
+      if (!/\b(she|he|they|son|daughter|student|students|kid|kids|child|children|boy|girl|pupil|pupils|learner|learners|niece|nephew|who)\s*$/.test(before)) return null;
+      if (/^\s*(students?|kids?|children|people|pupils?|learners?|pm|am|%|o'?clock|:|th\b|minutes?|mins?)/.test(after)) return null;
+      return [n, n];
+    }],
+    // "from 5 to 7", "between 8 and 10", "students 6-7"
+    ['\\b(?:from|between)\\s+(\\d{1,2})\\s*(?:to|and|-|–)\\s*(\\d{1,2})(?![0-9])', function (m, before, after) {
+      if (/^\s*(min|minutes?|pm|am|students?|kids?|people|o'?clock|:)/.test(after) || Number(m[1]) < 3 || Number(m[2]) > 19) return null;
+      return [Number(m[1]), Number(m[2])];
+    }],
+    ['\\b(?:students?|kids?|children|learners?|pupils?|class)\\s*(?:aged|of)?\\s*(\\d{1,2})\\s*[-–~]\\s*(\\d{1,2})(?![0-9])', function (m) { return [Number(m[1]), Number(m[2])]; }],
     // Hong Kong: K1-K3 = 3-6, P1-P6 = 6-12, F1-F6 / S1-S6 / 中一-中六 = 12-18, DSE = 15-18
     ['(^|[^a-z0-9])k\\s*\\.?\\s*([1-3])(?![0-9a-z])', function (m) { return [Number(m[2]) + 2, Number(m[2]) + 3]; }],
     ['(^|[^a-z0-9])(?:primary|p)\\s*\\.?\\s*([1-6])(?![0-9a-z])', function (m) { return [Number(m[2]) + 5, Number(m[2]) + 6]; }],
-    ['(^|[^a-z0-9\'’])(?:secondary|sec|form|f|s)\\s*\\.?\\s*([1-6])(?![0-9a-z])', function (m) { return [Number(m[2]) + 11, Number(m[2]) + 12]; }, true],
+    ['(^|[^a-z0-9\'’])(?:secondary|sec|form|f|s)\\s*\\.?\\s*([1-6])(?![0-9a-z])', function (m, before, after) {
+      // F1 the racing series is not Form 1, and an adult learner is not in Form N
+      if (/^\s*(racing|races?|cars?|drivers?|fans?|teams?|grand prix|season|game|迷|賽車|車手|車隊|方程式)/.test(after) || /\b(loves?|likes?|watch(es|ing)?|into|follows?)\s*$|鍾意\s*$|中意\s*$|睇\s*$/.test(before)) return null;
+      if (/\b(adults?|grown-?ups?|university|college)\b|成人|大人|大學|上班族|在職/.test(before + after)) return null;
+      return [Number(m[2]) + 11, Number(m[2]) + 12];
+    }, true],
     // 小N / 中N, but not 其中一個, 當中一個, 大小一樣 and similar everyday phrases
     ['(^|[^其初高大從細最小])小\\s*\\.?\\s*([一二三四五六1-6])(?![0-9個位名隻啲])', function (m) { return [num(m[2]) + 5, num(m[2]) + 6]; }],
     ['(^|[^其初高集心當班家之])中\\s*\\.?\\s*([一二三四五六1-6])(?![0-9個位名隻啲])', function (m) { return [num(m[2]) + 11, num(m[2]) + 12]; }, true],
-    ['(^|[^a-z])(?:hk)?dse(?![a-z])', function () { return [15, 18]; }, true],
+    // DSE counts only when no Form/S/中N year is given (see parseQuery).
+    ['(^|[^a-z])(?:hk)?dse(?![a-z])', function () { return [15, 18]; }, true, 'dse'],
     // UK Year n and US Grade n, as before
-    ['\\byear\\s*(\\d{1,2})(?![0-9])', function (m) { var n = Number(m[1]); return n >= 1 && n <= 13 ? [n + 5, n + 6] : null; }],
+    ['\\byear\\s*(\\d{1,2})(?![0-9])', function (m, before, after) {
+      var n = Number(m[1]);
+      if (/univ|\buni\b|college|degree|大學/.test(before + after)) return null; // "year 2 university" is not a school year
+      return n >= 1 && n <= 13 ? [n + 5, n + 6] : null;
+    }],
     ['\\bgrade\\s*(\\d{1,2})(?![0-9])', function (m) { var n = Number(m[1]); return n >= 1 && n <= 12 ? [n + 6, n + 7] : null; }],
   ];
 
@@ -272,7 +319,7 @@
     [/\b(kids?|child|children|young learners?)\b|小朋友|細路|兒童|小孩/i, [4, 12]],
     [/\b(primary|elementary school)\b|小學/i, [6, 12]],
     [new RegExp('\\b' + TEEN + '\\b|青少年', 'i'), [13, 18]],
-    [/\b(secondary|high school|middle school)\b|中學/i, [12, 18]],
+    [/\b(secondary|high school|middle school)\b|中學|高中|初中/i, [12, 18]],
     [/\b(adults?|grown-?ups?|professionals?|university|college|office workers?|working adults?)\b|成人|大人|上班族|大學|在職/i, [18, 150]],
     [/\b(ielts|toefl|toeic)\b|雅思/i, [16, 150]],
   ];
@@ -332,12 +379,18 @@
     var minutes = null, exact = null, gradeSecondary = false, levels = toSet([]);
 
     var work = applyRules(low, MINUTE_RULES, function (rule, v) { if (minutes == null) minutes = v; });
+    // Keywords are matched without the lesson length or phrases like "first
+    // time", so "30分鐘" or "first time" never count as a topic.
+    var scoreText = work.replace(/\b(first|last|next|this|every|each|full|part|free|spare|some|any|long|short|good|great|fun|hard|tough|difficult|nice)[\s-]+time\b/g, ' ');
+    var dse = null;
     work = applyRules(work, AGE_RULES, function (rule, r) {
       if (r[0] > r[1]) r = [r[1], r[0]];
       if (r[0] < 3 || r[0] > 99) return;
-      exact = exact ? [Math.min(exact[0], r[0]), Math.max(exact[1], r[1])] : r;
       if (rule[2]) gradeSecondary = true;
+      if (rule[3] === 'dse') { dse = r; return; }
+      exact = exact ? [Math.min(exact[0], r[0]), Math.max(exact[1], r[1])] : r;
     });
+    if (!exact && dse) exact = dse;
     work = applyRules(work, LEVEL_RULES, function (rule, list) { list.forEach(function (l) { levels[l] = true; }); });
 
     var age = exact ? { min: exact[0], max: exact[1], exact: true } : null;
@@ -348,7 +401,7 @@
       });
     }
 
-    var toks = tokens(raw);
+    var toks = tokens(scoreText);
     var tokSet = toSet(toks.map(norm));
     var skills = [], zhSkillWords = [];
     Object.keys(SKILL_WORDS).forEach(function (id) {
@@ -360,11 +413,11 @@
     // A head-count ("6 students") is read after school years are taken out, so
     // "Form 4 students" is a school year, not a group of four.
     if (/\bgroup of\b|\bclass of\b|\bwhole class\b|\d+\s*(?:students|kids|learners|children)\b|\d+\s*個(?:學生|小朋友|細路)/i.test(work) && skills.indexOf('group') < 0) skills.push('group');
-    var reading = Object.keys(READING_EN).some(function (w) { return tokSet[w]; }) || READING_ZH.some(function (w) { return raw.indexOf(w) >= 0; });
+    var reading = Object.keys(READING_EN).some(function (w) { return tokSet[w]; }) || readingZh(raw);
 
     // Teen and adult signals push kid-themed games down (A2). "business" and
     // "work" do not count when the teacher states an age under 13.
-    var older = new RegExp('\\b(' + TEEN + '|secondary|high school|adults?|grown-?ups?|professionals?|university|college|dse|hkdse|ielts|toefl|toeic)\\b|青少年|中學|成人|大人|上班族|在職|大學|雅思', 'i').test(raw) ||
+    var older = new RegExp('\\b(' + TEEN + '|secondary|high school|adults?|grown-?ups?|professionals?|university|college|dse|hkdse|ielts|toefl|toeic)\\b|青少年|中學|高中|初中|成人|大人|上班族|在職|大學|雅思', 'i').test(raw) ||
       gradeSecondary || !!(age && age.exact && age.min >= 13);
     var business = /\bbusiness\b|商業|商務/i.test(raw) || workSignal(low);
     var adultSignal = older || (business && !(age && age.max < 13));
@@ -373,11 +426,11 @@
     var rest = tokens(work).map(norm).filter(function (t) { return !STOP[t] && !TEACH_EN[t] && !/^\d+$/.test(t); });
     var zhRest = work;
     TEACH_ZH.forEach(function (w) { zhRest = zhRest.split(w).join(' '); });
-    zhRest = (zhRest.match(CJK_ALL) || []).join('');
+    zhRest = (zhRest.replace(/[一二兩三四五六七八九十年]/g, ' ').match(CJK_ALL) || []).join('');
     var levelList = LEVELS.filter(function (l) { return levels[l]; });
 
     return {
-      text: raw,
+      text: scoreText,
       low: low,
       tokens: toks,
       tokSet: tokSet,
@@ -980,6 +1033,11 @@
 
   function inRoot(node) { return !!(S.root && node && node.nodeType && S.root.contains(node)); }
 
+  function selectionInRoot() {
+    var sel = document.getSelection && document.getSelection();
+    return !!(sel && (inRoot(sel.anchorNode) || inRoot(sel.focusNode))) || inRoot(document.activeElement);
+  }
+
   function boot() {
     if (typeof document === 'undefined' || S.booted) return;
     S.booted = true;
@@ -1000,7 +1058,12 @@
       e.stopImmediatePropagation();
       if (e.target === S.input) onInput();
     }, true);
-    window.addEventListener('change', function (e) { if (inRoot(e.target)) e.stopImmediatePropagation(); }, true);
+    // Key, text-editing and clipboard events from the widget stop here too,
+    // so no page script sees the keys or text typed into the widget.
+    ['change', 'keyup', 'keypress', 'beforeinput', 'textInput', 'compositionstart', 'compositionupdate', 'compositionend',
+      'select', 'cut', 'copy', 'paste'].forEach(function (type) {
+      window.addEventListener(type, function (e) { if (inRoot(e.target)) e.stopImmediatePropagation(); }, true);
+    });
     window.addEventListener('keydown', function (e) {
       if (!inRoot(e.target)) return;
       e.stopImmediatePropagation();
@@ -1019,12 +1082,16 @@
     // Pause mode: nothing that happens inside the widget reaches page-level
     // listeners (pointer, scroll, focus), so a recorder sees no widget activity.
     ['mousedown', 'mouseup', 'mousemove', 'mouseover', 'mouseout', 'pointerdown', 'pointerup', 'pointermove', 'pointerover', 'pointerout',
-      'touchstart', 'touchmove', 'touchend', 'wheel', 'scroll', 'focus', 'blur', 'focusin', 'focusout', 'dblclick', 'contextmenu', 'selectstart', 'copy', 'paste'].forEach(function (type) {
+      'pointercancel', 'touchstart', 'touchmove', 'touchend', 'touchcancel', 'wheel', 'scroll', 'focus', 'blur', 'focusin', 'focusout',
+      'dblclick', 'contextmenu', 'selectstart', 'selectionchange', 'drag', 'dragstart', 'dragend', 'dragenter', 'dragleave', 'dragover', 'drop'].forEach(function (type) {
       window.addEventListener(type, function (e) {
-        if (S.clarityMode === 'pause' && inRoot(e.target)) e.stopImmediatePropagation();
+        if (S.clarityMode === 'pause' && (inRoot(e.target) || (type === 'selectionchange' && selectionInRoot()))) e.stopImmediatePropagation();
       }, { capture: true, passive: true });
     });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.open) close(); });
+    // Escape on the page itself closes the widget; Escape in a page field is the page's.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && S.open && (e.target === document.body || e.target === document.documentElement)) close();
+    });
 
     // CSS: added once. The root is fixed-position inline, so nothing on the
     // page moves; it stays invisible until the stylesheet has loaded.
@@ -1092,12 +1159,17 @@
   }
 
   function close() {
+    var active = document.activeElement;
+    var refocus = !active || active === document.body || inRoot(active);
     S.open = false;
     S.launcher.setAttribute('aria-expanded', 'false');
     S.root.classList.remove('ll-is-open');
+    if (refocus) S.launcher.focus();
     if (S.panel) S.panel.hidden = true;
     if (S.clarityMode === 'pause' && S.panel) {
       // Leave nothing from the conversation in the page before recording resumes.
+      var sel = document.getSelection && document.getSelection();
+      if (sel && (inRoot(sel.anchorNode) || inRoot(sel.focusNode))) sel.removeAllRanges();
       S.log.textContent = '';
       S.input.value = '';
       onInput();
@@ -1105,7 +1177,6 @@
       applyLabels(S.defaultLang);
       clarityCall('resume');
     }
-    S.launcher.focus();
   }
 
   function buildPanel() {
@@ -1316,11 +1387,21 @@
   // "7-9" typed in reply to "How old are they?" becomes "Age 7-9" so the parser reads it.
   // "she's 9" or "9" in reply to "How old are they?" becomes "Age 9".
   function answerPhrase(pending, text) {
-    if (pending.type !== 'age' || parseQuery(text).hasAge) return text;
+    var pq = parseQuery(text);
+    if (pending.type !== 'age' || pq.hasAge || pq.hasLevel) return text;
+    text = text.toLowerCase()
+      .replace(new RegExp('\\b(' + EN_NUM_RE + ')\\b', 'g'), function (w) { var n = enNumber(w); return n != null ? String(n) : w; })
+      .replace(new RegExp(ZH_NUM_RE, 'g'), function (w) { var n = zhNumber(w); return n != null ? String(n) : w; });
     var m = /(\d{1,2})(\s*[-–~]\s*\d{1,2})?\s*(\+)?/.exec(text);
     if (!m) return text;
     var n = m[0].trim();
     return (pending.lang || S.lang) === 'zh' ? n + ' 歲' : 'Age ' + n;
+  }
+
+  // "7", "she's nine", "九歲": a reply that reads as an age of 3 or more.
+  function ageReply(pending, text) {
+    var a = parseQuery(answerPhrase(pending, text));
+    return a.hasAge && a.age.min >= 3;
   }
 
   function choiceLabel(pending, i, lang) {
@@ -1347,7 +1428,10 @@
       // Only a short answer joins the earlier question. A new full question
       // (it brings its own skill, or its own age when a skill was asked) starts fresh.
       var pq = parseQuery(text);
-      var isAnswer = picked || (p.type === 'age' ? !pq.skills.length && !pq.reading : !pq.hasAge && !pq.hasLevel);
+      // After picks shown without an age (soft), only a reply that gives an age or level joins them.
+      var isAnswer = picked || (p.type === 'age'
+        ? !pq.skills.length && !pq.reading && (!p.soft || pq.hasLevel || ageReply(p, text))
+        : !pq.hasAge && !pq.hasLevel);
       if (isAnswer) {
         full = p.text + '. ' + (picked || answerPhrase(p, text));
         noAsk = true;
@@ -1393,6 +1477,11 @@
   }
 
   function setPending(res, text) {
+    // Picks shown without an age come with the age chips; a typed age answers them too.
+    if (res.kind === 'picks' && res.narrow && res.source === 'rules') {
+      S.pending = { type: 'age', text: text, choices: [0, 1, 2, 3, 4], lang: S.lang, soft: true };
+      return;
+    }
     if (res.kind !== 'ask' || (res.askType !== 'age' && !(res.choices || []).length)) return;
     S.pending = res.askType === 'age'
       ? { type: 'age', text: text, choices: [0, 1, 2, 3, 4], lang: S.lang }
@@ -1527,7 +1616,7 @@
     internals: {
       checkDevice: checkDevice, isModelCached: isModelCached, modelDownloadBytes: modelDownloadBytes,
       createModelClient: createModelClient, toMB: toMB, track: track, EVENTS: EVENTS,
-      state: function () { return { ai: S.ai, device: S.device, bytes: S.bytes, lang: S.lang, clarityMode: S.clarityMode }; },
+      state: function () { return { ai: S.ai, device: S.device, bytes: S.bytes, lang: S.lang, clarityMode: S.clarityMode, open: !!S.open }; },
       // Tests and model-test.html only: what each answer contained.
       turns: function () {
         return S.turns.map(function (tu) {
