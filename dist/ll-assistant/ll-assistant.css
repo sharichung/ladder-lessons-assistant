@@ -57,14 +57,14 @@
 #ll-assistant .ll-cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--ll-sh-lift); }
 #ll-assistant .ll-cta:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
 #ll-assistant .ll-cta:disabled { background: var(--ll-line); color: var(--ll-ink-soft); border-color: var(--ll-muted); box-shadow: none; cursor: default; }
-#ll-assistant .ll-cta-block { display: block; width: 100%; margin: 0 0 6px; padding: 9px 16px; }
+#ll-assistant .ll-cta-block { display: block; width: 100%; margin: 0 0 6px; }
 
 /* Launcher */
 #ll-assistant .ll-launcher {
   position: absolute;
   bottom: calc(var(--ll-y) + env(safe-area-inset-bottom, 0px));
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 0 20px; white-space: nowrap;
+  white-space: nowrap;
 }
 #ll-assistant.ll-pos-right .ll-launcher { right: var(--ll-x); }
 #ll-assistant.ll-pos-left .ll-launcher { left: var(--ll-x); }
@@ -94,8 +94,7 @@
 /* Chinese headings: weight 700 and 0.02em (style guide §2). data-l="2" is Chinese. */
 #ll-assistant .ll-panel[data-l="2"] .ll-title,
 #ll-assistant .ll-panel[data-l="2"] .ll-offer-title,
-#ll-assistant .ll-panel[data-l="2"] .ll-card-title,
-#ll-assistant .ll-panel[data-l="2"] .ll-card-name { font-weight: 700; letter-spacing: .02em; }
+#ll-assistant .ll-panel[data-l="2"] .ll-card-title { font-weight: 700; letter-spacing: .02em; }
 #ll-assistant .ll-close {
   width: 36px; height: 36px; border: 0; border-radius: var(--ll-r-pill);
   background: transparent; font-size: 24px; line-height: 1; cursor: pointer; color: var(--ll-ink-soft);
@@ -149,23 +148,24 @@
 }
 #ll-assistant .ll-chip:hover:not(:disabled) { border-color: var(--ll-coral-ink); }
 #ll-assistant .ll-chip:disabled { cursor: default; color: var(--ll-ink-soft); }
-#ll-assistant .ll-n {
+/* Number badge on numbered choices */
+#ll-assistant .ll-chip .ll-tag {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 20px; height: 20px; border-radius: var(--ll-r-pill);
-  background: var(--ll-cream-deep); font-family: var(--ll-ff-head); font-size: 12px; font-weight: 600;
+  min-width: 20px; height: 20px; padding: 0 6px;
+  font-family: var(--ll-ff-head); font-weight: 600; color: var(--ll-ink);
 }
 
 /* Game cards: white, soft shadow, no outline (B4) */
 #ll-assistant .ll-cards { list-style: none; margin: 6px 0 0; padding: 0; }
 #ll-assistant .ll-card { margin: 0 0 10px; padding: 12px 14px; background: #fff; border-radius: var(--ll-r-rung); box-shadow: var(--ll-sh-card); }
 #ll-assistant .ll-card:last-child { margin-bottom: 0; }
-#ll-assistant .ll-note { margin: 4px 2px 10px; font-size: 13px; color: var(--ll-ink-soft); }
+#ll-assistant .ll-cards > li.ll-small { margin: 4px 2px 10px; }
 #ll-assistant .ll-card-title {
   display: inline; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
   font-family: var(--ll-ff-head); font-size: 16px; font-weight: 600; color: var(--ll-coral-ink);
 }
-#ll-assistant .ll-card-title:hover { text-decoration: underline; }
-#ll-assistant .ll-card-name { margin: 0; font-family: var(--ll-ff-head); font-size: 16px; font-weight: 600; }
+#ll-assistant button.ll-card-title:hover { text-decoration: underline; }
+#ll-assistant p.ll-card-title { margin: 0; color: var(--ll-ink); cursor: default; }
 #ll-assistant .ll-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; }
 #ll-assistant .ll-tag { font-size: 12px; padding: 1px 8px; border-radius: var(--ll-r-pill); background: var(--ll-cream-deep); color: var(--ll-ink-soft); }
 /* Plan labels: same as .tier on the library page. data-t: 1 free, 2 parent, 3 teacher. */
@@ -181,23 +181,18 @@
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 #ll-assistant .ll-how { font-size: 13.5px; margin: 6px 0 0; }
-#ll-assistant .ll-levels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-#ll-assistant .ll-level {
-  min-height: 34px; padding: 4px 14px; border-radius: var(--ll-r-pill);
-  border: 2px solid var(--ll-line); background: #fff; cursor: pointer;
-  font-family: var(--ll-ff-head); font-weight: 600; color: var(--ll-coral-ink);
-}
-#ll-assistant .ll-level:hover { border-color: var(--ll-coral-ink); }
+/* Level buttons on the Ladder Vocabulary card */
+#ll-assistant .ll-card .ll-chip { font-family: var(--ll-ff-head); color: var(--ll-coral-ink); padding: 4px 14px; }
 
 /* Input */
 #ll-assistant .ll-composer { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 12px; border-top: 1px solid var(--ll-line); }
 #ll-assistant .ll-input {
-  flex: 1 1 auto; min-height: 48px; max-height: 120px; resize: none;
+  flex: 1 1 auto; min-width: 0; min-height: 48px; max-height: 120px; resize: none;
   padding: 11px 12px; border: 2px solid var(--ll-ink-soft); border-radius: var(--ll-r-rung); background: #fff;
   font-family: var(--ll-ff-typed);
   font-size: 16px; /* 16px stops iOS zooming in */
 }
-#ll-assistant .ll-send { flex: 0 0 auto; padding: 0 18px; }
+#ll-assistant .ll-send { flex: 0 0 auto; }
 
 @media (prefers-reduced-motion: reduce) {
   #ll-assistant .ll-bar span, #ll-assistant .ll-cta { transition: none; }

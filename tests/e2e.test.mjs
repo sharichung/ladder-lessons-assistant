@@ -214,7 +214,7 @@ test('Keyword mode (WebGPU off): page load, header, every fixed question, cards,
       name: (c.querySelector('.ll-card-title, .ll-card-name').textContent || '').replace(/\s*↗\s*$/, ''),
       tier: c.querySelector('.ll-tier').textContent, bg: getComputedStyle(c.querySelector('.ll-tier')).backgroundColor,
       tags: [...c.querySelectorAll('.ll-tag')].map((t) => t.textContent), how: !!c.querySelector('.ll-how'),
-      levels: [...c.querySelectorAll('.ll-level')].map((b) => b.textContent.replace(/\s*↗\s*$/, '')),
+      levels: [...c.querySelectorAll('.ll-tags .ll-chip')].map((b) => b.textContent.replace(/\s*↗\s*$/, '')),
     })));
     assert.equal(cards.length, turn.items.length);
     turn.items.forEach((it, i) => {
@@ -228,12 +228,12 @@ test('Keyword mode (WebGPU off): page load, header, every fixed question, cards,
       if (it.ids) assert.deepEqual(cards[i].levels, it.ids.map((id) => cat.byId[id].level_min), `${q.id}: one link per level`);
       if (!it.ids && cat.byId[it.id].level_min) assert.ok(cards[i].tags.some((t) => /A1|A2|B1|B2|C1|C2/.test(t)), `${q.id}: level tag`);
     });
-    if (turn.kidNote) assert.equal(await el.locator('.ll-note').count(), 1);
+    if (turn.kidNote) assert.equal(await el.locator('.ll-cards > li.ll-small').count(), 1);
   }
 
   // Each game button opens its catalogue URL, and only that.
   const lastPicks = (await page.evaluate(() => LLAssistant.internals.turns())).filter((t) => t.kind === 'picks').pop();
-  const buttons = lastBot(page).locator('.ll-card-title, .ll-level');
+  const buttons = lastBot(page).locator('button.ll-card-title, .ll-card .ll-chip');
   for (let i = 0; i < await buttons.count(); i++) await buttons.nth(i).click();
   const opened = await page.evaluate(() => window.__opened);
   assert.deepEqual(opened, lastPicks.ids.map((id) => URL_OF[id]));
@@ -253,7 +253,7 @@ test('Keyword mode (WebGPU off): page load, header, every fixed question, cards,
   assert.equal(dom.forms, 0, 'no <form>');
   assert.equal(dom.ids, 0, 'no ids, sources or lang attributes');
   assert.ok(dom.tierCodes.every((c) => ['1', '2', '3'].includes(c)));
-  assert.ok(!dom.classes.some((c) => /free|parent|teacher|phonics|vocab|grammar|speaking|kid|zh|en$/i.test(c)), 'class names carry no game data: ' + dom.classes.join(' '));
+  assert.ok(!dom.classes.some((c) => /free|parent|teacher|phonics|vocab|grammar|speaking|kid|level|note|name|zh|en$/i.test(c)), 'class names carry no game data: ' + dom.classes.join(' '));
 
   // Email gate: widget hides while it is visible.
   await page.locator('#ll-assistant .ll-close').click();
@@ -278,8 +278,8 @@ test('E2: analytics carry nothing from the conversation, and nothing leaves the 
     await page.keyboard.type(q.text, { delay: 0 });
     await page.locator('#ll-assistant .ll-send').click();
     await page.waitForFunction(() => LLAssistant.internals.turns().length % 2 === 0 && !document.querySelector('#ll-assistant .ll-thinking'));
-    const tl = await lastBot(page).locator('.ll-card-title').count();
-    if (tl) await lastBot(page).locator('.ll-card-title').first().click();
+    const tl = await lastBot(page).locator('button.ll-card-title').count();
+    if (tl) await lastBot(page).locator('button.ll-card-title').first().click();
     assert.equal(requests.length, n0, `${q.id}: network request after typing: ${requests.slice(n0).map((r) => r.url).join(', ')}`);
   }
   const { gtag, clarity } = await calls(page);
@@ -331,7 +331,7 @@ test('Microsoft Clarity (real library) records the widget without the text, hash
     await page.keyboard.type(q.text, { delay: 0 });
     await page.locator('#ll-assistant .ll-send').click();  // mouse click: the text box loses focus first
     await page.waitForFunction(() => LLAssistant.internals.turns().length % 2 === 0);
-    const title = lastBot(page).locator('.ll-card-title, .ll-level');
+    const title = lastBot(page).locator('button.ll-card-title, .ll-card .ll-chip');
     if (await title.count()) await title.first().click();
   }
   await page.locator('#ll-assistant .ll-input').click();
@@ -584,5 +584,93 @@ test('Second visit: a fully cached model starts without a download click or down
   await page.waitForFunction(() => LLAssistant.internals.state().ai === 'ready');
   assert.ok(!(await eventNames(page)).includes('ll_download_started'));
   assert.equal(await page.locator('#ll-assistant .ll-offer').isVisible(), false);
+  await context.close();
+});
+
+// ---------- fixes from the review round ----------
+
+const PAUSE = (b) => b.replace('defer data-avoid="#email-gate"', 'defer data-avoid="#email-gate" data-clarity="pause"');
+// Stand-in for a session recorder: page-level capture listeners, as Clarity binds them.
+const RECORDER = `window.__seen = {};
+  ['click','mousedown','mousemove','pointerdown','wheel','scroll','input','change','keydown','focus'].forEach(function (t) {
+    document.addEventListener(t, function (e) { var r = document.getElementById('ll-assistant'); if (r && e.target && e.target.nodeType && r.contains(e.target)) window.__seen[t] = (window.__seen[t] || 0) + 1; }, true);
+  });`;
+
+test('Pause mode: no widget event reaches page-level listeners; mask mode still lets clicks through (7B)', async () => {
+  for (const mode of ['pause', 'mask']) {
+    const { context, page } = await newPage(mode === 'pause' ? { demoPatch: PAUSE } : {});
+    await context.addInitScript(RECORDER);
+    await openWidget(page);
+    await page.locator('#ll-assistant .ll-input').click();
+    await page.keyboard.type('Primary 5 student vocabulary');
+    await page.locator('#ll-assistant .ll-send').click();
+    await page.waitForFunction(() => document.querySelectorAll('#ll-assistant .ll-card').length > 0);
+    await page.locator('#ll-assistant .ll-card .ll-chip').first().click();
+    await page.mouse.move(1000, 600);
+    await page.mouse.wheel(0, 200);
+    const seen = await page.evaluate(() => window.__seen);
+    if (mode === 'pause') assert.deepEqual(seen, {}, 'pause mode: widget events seen by the page: ' + JSON.stringify(seen));
+    else { assert.ok(seen.click > 0, 'mask mode keeps clicks visible'); assert.ok(!seen.input && !seen.change && !seen.keydown, 'typing never visible'); }
+    assert.equal((await page.evaluate(() => window.__opened)).length, 1, `${mode}: the level button still opened its game`);
+    await context.close();
+  }
+});
+
+test('Pause mode: an answer that arrives after close is not drawn until reopen; send button resets', async () => {
+  const { context, page } = await newPage({ demoPatch: PAUSE });
+  await context.route('**/catalogue.compact.json', async (r) => { await new Promise((res) => setTimeout(res, 1500)); r.continue(); });
+  await page.goto(DEMO);
+  await page.waitForFunction(() => window.LLAssistant && document.querySelector('#ll-assistant .ll-launcher'));
+  await page.locator('#ll-assistant .ll-launcher').click();
+  await page.locator('#ll-assistant .ll-input').fill('Primary 5 student vocabulary');
+  await page.locator('#ll-assistant .ll-input').press('Enter');
+  await page.locator('#ll-assistant .ll-input').fill('an unsent draft');
+  await page.locator('#ll-assistant .ll-close').click();
+  assert.equal(await page.locator('#ll-assistant .ll-send').isDisabled(), true, 'no sign of the draft after close');
+  await page.waitForFunction(() => LLAssistant.internals.turns().length === 2, null, { timeout: 10000 });
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('#ll-assistant .ll-msg').count(), 0, 'nothing drawn while closed');
+  await page.locator('#ll-assistant .ll-launcher').click();
+  await page.waitForFunction(() => document.querySelectorAll('#ll-assistant .ll-card').length > 0);
+  await context.close();
+});
+
+test('A failed catalogue load survives a language switch and the queued question is answered after retry', async () => {
+  const { context, page } = await newPage();
+  let fail = true;
+  await context.route('**/catalogue.compact.json', (r) => (fail ? r.fulfill({ status: 503, body: '' }) : r.continue()));
+  await page.goto(DEMO);
+  await page.waitForFunction(() => window.LLAssistant && document.querySelector('#ll-assistant .ll-launcher'));
+  await page.locator('#ll-assistant .ll-launcher').click();
+  await page.waitForSelector('text=The game list did not load.');
+  await page.locator('#ll-assistant .ll-input').fill('中四學生 口語');
+  await page.locator('#ll-assistant .ll-input').press('Enter');
+  await page.waitForSelector('text=遊戲清單載入唔到。');
+  assert.equal(await page.locator('#ll-assistant .ll-chip', { hasText: '再試' }).count(), 1);
+  fail = false;
+  await page.locator('#ll-assistant .ll-chip', { hasText: '再試' }).click();
+  await page.waitForFunction(() => LLAssistant.internals.turns().some((t) => t.kind === 'picks'));
+  await context.close();
+});
+
+test('A natural reply to "How old are they?" is understood', async () => {
+  const { context, page } = await newPage();
+  await openWidget(page);
+  let r = await ask(page, 'reading practice');
+  assert.equal(r.turn.askType, 'age');
+  r = await ask(page, "she's 9");
+  assert.equal(r.turn.askType, 'reading', 'age taken from the reply');
+  assert.match(r.text, /There is no reading game yet/);
+  await context.close();
+});
+
+test('CTA buttons use the site padding exactly (9A)', async () => {
+  const { context, page } = await newPage({ fakeGpu: true });
+  await openWidget(page);
+  for (const sel of ['.ll-send', '.ll-offer .ll-cta']) {
+    assert.equal(await page.locator('#ll-assistant ' + sel).evaluate((b) => getComputedStyle(b).padding), '11px 26px', sel);
+  }
+  await page.locator('#ll-assistant .ll-close').click();
+  assert.equal(await page.locator('#ll-assistant .ll-launcher').evaluate((b) => getComputedStyle(b).padding), '11px 26px', 'launcher');
   await context.close();
 });

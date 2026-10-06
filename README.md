@@ -47,7 +47,7 @@ Deploy **one folder: `dist/ll-assistant/`**. Copy it as-is into the main site, f
 
 | File | Size (gzip) | When it loads |
 |---|---|---|
-| `ll-assistant.js` | 70 KB (23 KB) | Page load, `defer` |
+| `ll-assistant.js` | 78 KB (25 KB) | Page load, `defer` |
 | `ll-assistant.css` | 12 KB (3 KB) | Page load, added by the script |
 | `catalogue.compact.json` | 41 KB (15 KB) | When the teacher opens the widget |
 | `ll-worker.js` | 3 KB | Only after the download click, or when the model is already cached |
@@ -129,7 +129,14 @@ Ladder Talk's `age_min` is 10 (changed from 16 because teen topics were added).
 | Year N (UK) | N+5 to N+6 |
 | Grade N (US) | N+6 to N+7 |
 
-Spaces and full stops don't matter: "P.5", "Primary5", "小 五" and "F.4" all work.
+Spaces and full stops don't matter: "P.5", "Primary5", "小 五", "小.5" and "F.4" all work.
+
+Other ways of writing ages and school years that are recognised:
+- Written-out numbers: "Form One", "Primary Five", "Sec 2", "小學三年級", "中學一年級".
+- Ages in words or other forms: "eight year old", "nine-year-old", "九歲", "七歲半", "9 y.o.", "Age: 9" and "my student is 9 years".
+  - "for 5 years" and "3 years of English" are not read as ages.
+- Two ages: "6 and 10 years old" becomes 6–10.
+- Phrases that are not school years: "其中一個" and "當中一個" (one of them) are not read as 中一.
 
 **Which age the filter uses:**
 - An exact age or school year uses the **youngest** age of its range. So Form 4 (15–16) does not get games with `age_min` 16.
@@ -138,13 +145,20 @@ Spaces and full stops don't matter: "P.5", "Primary5", "小 五" and "F.4" all w
 **Teen and adult signals** push kid-themed games down:
 - teen, secondary, Form/S/F/中 N, adult, 成人, DSE, IELTS
 - an exact age of 13 or more
-- business, 商業, 商務, and work in the sense of "at work", "for work", "office" or 上班
+- "teenage" counts as a teen signal
+- business, 商業, 商務, and "work", except in homework, group work, worksheet or "work on"
+- office, 上班 and 職場
 
 Exception: when the teacher states an age under 13, "business" and "work" do not count. So "9 year old business game" still gets Mini Business Tycoon Junior.
 
 ### The answer
 
-**Number of games.** Under 30 minutes gives 1–2 games; 30 minutes or more gives 2–3; no length given gives up to 3. If the strong matches run out, the next games of the same skill that pass the filters fill the gap.
+**Number of games.** Under 30 minutes gives 1–2 games; 30 minutes or more gives 2–3; no length given gives up to 3. "1 hour 15 min" and "1小時15分鐘" count as 75 minutes.
+- If the strong matches run out, the gap is filled in this order:
+  - the next games of the same skill that pass the filters
+  - other matching games
+  - classroom tools
+- Games of the asked-for skill always come before keyword matches from other skills.
 
 **Free game first.** A free game goes first when all of these hold:
 - it passed the filters
@@ -156,7 +170,7 @@ This applies in both modes. In AI mode, if the model leaves it out, the widget p
 **Ladder Vocabulary** takes one card, with a button for each level that fits the age and any stated level. For example, a P5 student gets A1 · A2 · B1, and "A2" gives only A2.
 
 **When the widget asks instead of answering:**
-- **An age or grade with no skill** ("Form 4 student", "6歲 beginner"): one question, "Which skill?", with numbered choices 1) Speaking 2) Writing 3) Grammar 4) Vocabulary 5) Phonics 6) Listening, or 1) 口語 2) 寫作 3) 文法 4) 詞彙 5) 拼讀 6) 聽力 in Chinese. This happens only when the rest of the message is teaching words. "My 8 year old wants a pizza recipe" still gets the off-topic reply.
+- **An age, grade or level with no skill** ("Form 4 student", "Form 4 students", "中四生", "Any ideas for a Form 4 student?", "Adult, B2", "6歲 beginner"): one question, "Which skill?", with numbered choices 1) Speaking 2) Writing 3) Grammar 4) Vocabulary 5) Phonics 6) Listening, or 1) 口語 2) 寫作 3) 文法 4) 詞彙 5) 拼讀 6) 聽力 in Chinese. This happens only when the rest of the message is teaching words. "My 8 year old wants a pizza recipe" still gets the off-topic reply.
 - **Reading:**
   - Under 8, reading means phonics.
   - From 8, the widget says there is no reading game yet and offers 1) Vocabulary 2) Grammar 3) Listening.
@@ -164,14 +178,19 @@ This applies in both modes. In AI mode, if the model leaves it out, the widget p
   - With no age, it asks the age first.
 - **No game of that skill for this age** (e.g. "5 year old grammar"): it says so, for example "Grammar games start at age 8", and offers the skills that do have games.
 
-**Older learners where every game is kid-themed** ("adult business english"; all four Money English games are kid-themed):
-- The best game that isn't kid-themed goes first (Quick Fire Flashcards today).
+**Older learners where every game is kid-themed** ("adult business english", "teenager, money"; all four Money English games are kid-themed):
+- The best game that isn't kid-themed goes first: a keyword match if there is one, otherwise a game whose catalogue text is about older learners, free first. Today that is Quick Fire Flashcards.
 - Then the line "No Money English game is designed for teens or adults yet. These are kid-themed:".
 - Then the kid-themed games, older ones first.
 
-Ladder Talk and Ladder Frames do **not** come up for "adult business english": their keywords don't mention business or work. Ladder Talk matches only on "adult" and is second in line. Adding words such as `business` `work` `商業` `工作` to their keywords in the source would bring them in.
+**Ladder Talk and Ladder Frames do not come up for work or business English**, because their keywords don't mention business or work:
+- "adult business english" and "商務英文 上班族" give Quick Fire Flashcards, then kid-themed Money English games.
+- "English for work" gets the "could not match" reply.
+- They only appear when a speaking word is also typed, for example "working adults small talk".
 
-**Short answers join the previous question.** A digit, a chip, or a reply that only gives an age, or only gives a skill, is added to the earlier question. A new full question starts fresh.
+Adding words such as `business`, `work`, `商業` or `工作` to their keywords in the source would bring them in.
+
+**Short answers join the previous question.** A digit, a chip, or a reply that only gives an age ("she's 9", "9") or only gives a skill is added to the earlier question. A new full question starts fresh.
 
 ### AI mode
 
@@ -229,7 +248,7 @@ One language per conversation. It changes only when a message has Chinese charac
   - Keyword mode: "Matches by keyword." / 「按關鍵字配對。」
 
 **What leaves the device:**
-- There is no server. Nothing the teacher types, and nothing worked out from it, is sent anywhere by the widget.
+- There is no server. The widget's code sends nothing the teacher types, and nothing worked out from it, anywhere. The Clarity and Google Fonts notes below describe what other scripts and the browser itself can see.
 - No network request is made per question. The tests check this after every one of the fixed questions.
 - The conversation lives in page memory only and is gone on reload.
 - `localStorage` holds one number: `ll-ai-bytes:<model id>`, the download size.
@@ -261,18 +280,25 @@ One language per conversation. It changes only when a message has Chinese charac
 - Typing, change and key events stop at the widget, before Clarity's listeners. This matters because without it, Clarity uploads an encoded fingerprint (a hash) of the typed text when the text box loses focus. The browser tests run the real Clarity library to confirm the fingerprint no longer appears.
 - Games open from buttons, not links, so Clarity's click records carry no game address.
 - The widget's page code holds no game ids, sources or `lang` attributes. Plan colours come from a one-character code (`data-t="1|2|3"`), and class names never name a game, plan, skill or language.
+- Class names are the same for every kind of answer.
 - **What Clarity still records:**
-  - where clicks happen inside the widget
-  - that typing happened
-  - the character count of each masked text, such as a card title or description. Someone could match those counts against the catalogue to guess which games were shown.
+  - where clicks, mouse movement and scrolling happen inside the widget
+  - the character count of each masked text, such as a card title or description
+  - the page structure: how many cards, tags and buttons each answer has
+
+  Someone could match those counts against the catalogue to guess which games were shown. Typing itself is not recorded: input, change and key events never reach Clarity.
 - **For a stronger guarantee, add `data-clarity="pause"`** to the script tag:
   - Clarity pauses while the widget is open.
-  - On close, the conversation is cleared from the page, kept in memory, and redrawn when the widget reopens. The labels go back to the page's language before Clarity resumes.
-  - Clarity then sees nothing from inside the open widget.
+  - Every mouse, touch, scroll, focus and click event inside the widget also stops before Clarity's listeners. The buttons still work, because the widget runs them itself.
+  - On close, the conversation is cleared from the page and kept in memory. An answer that finishes after close is not drawn until the widget reopens. The send button and labels reset to the page's language before Clarity resumes.
+  - Clarity then sees nothing from the open widget except that the launcher was clicked.
 - **After deploying, check both GA4 and Clarity:**
   - **Clarity:** open the widget in an incognito window, type a message and click a game. Find that session in Clarity and confirm the widget area shows masked blocks only, with no game addresses.
   - **GA4:** in DebugView, confirm a game click shows only `ll_game_click`, with no automatic `click` event carrying a `link_url`.
-- **Google Fonts:** the site loads Chinese fonts from Google Fonts in character ranges. When the widget shows Chinese labels, Google may serve those label characters. It never serves the characters the teacher types, because the text box and the teacher's bubble use system fonts.
+- **Google Fonts:** the site loads Noto Sans HK from Google Fonts in character ranges, and the browser fetches only the ranges for characters on screen.
+  - When the widget shows Chinese labels, game titles or descriptions, Google can see which character ranges were needed. That roughly reflects which games were shown.
+  - It never covers the characters the teacher types, because the text box and the teacher's own bubble use system fonts.
+  - Rendering card text in system fonts too would close this. It would change decision B2, so I have not done it.
 - The widget never asks for a name, an email or anything about a specific child. It makes no security or certification claims.
 
 ---
@@ -314,7 +340,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 **Chromium:** `npm test` uses `$CHROME_PATH` if set, otherwise installed Google Chrome.
 
 **The question set:**
-- `tests/questions.json` has 61 fixed questions in English and Chinese. They cover every failing case from the test round plus the reviewers' edge cases:
+- `tests/questions.json` has 93 fixed questions in English and Chinese. They cover every failing case from the test round plus the reviewers' edge cases:
   - kids, adults, IELTS, DSE and Form 4
   - phonics, reading and vocabulary levels
   - lesson lengths
@@ -362,11 +388,20 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 3. **The real Microsoft Clarity library:**
    - no typed-text fingerprint, game URL, game id, game title or typed word reaches the upload
    - a deliberate break, with the change-event blocker removed, makes this test fail
-4. **`data-clarity="pause"`:** paused while open, conversation cleared before it resumes.
+4. **`data-clarity="pause"`:**
+   - paused while open, and no widget event reaches page-level listeners
+   - the conversation is cleared before Clarity resumes
+   - an answer arriving after close is not drawn
+   - the send button resets
+   - in mask mode, clicks still reach Clarity but typing never does
 5. **Language:** one language per conversation, earlier answers redrawn, "2" keeps Chinese.
 6. **Choices:** skill question, reading and "no game for this age" answered by click.
 7. **Narrow screens** (320, 375 and 768 px wide): panel fits, no sideways scroll, input and button on one row.
-8. **Device and download:**
+8. **Review-round fixes:**
+   - a failed catalogue load survives a language switch and is retried
+   - "she's 9" answers the age question
+   - the CTA buttons use the site padding exactly
+9. **Device and download:**
    - no `navigator.gpu`
    - phone and in-app user agents
    - simulated GPU: size shown, nothing before the click, failed download falls back
@@ -376,7 +411,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 
 ### Before and after (E3)
 
-**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 26/60, after 60/60**. Full table: `tests/results/keyword-before-after.md`.
+**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 28/92, after 92/92**. Full table: `tests/results/keyword-before-after.md`.
 
 **AI mode (needs a real GPU):**
 1. Start the server.
@@ -417,7 +452,7 @@ To see a true first visit (the download button with nothing cached), use the dem
 
 | Measure | Value |
 |---|---|
-| Page-load cost | 2 requests: `ll-assistant.js` 23 KB gzip + `ll-assistant.css` 3 KB gzip. Layout shift 0. **Measured** in headless Chromium |
+| Page-load cost | 2 requests: `ll-assistant.js` 25 KB gzip + `ll-assistant.css` 3 KB gzip. Layout shift 0. **Measured** in headless Chromium |
 | Model download size | **Not measured yet.** `model-test.html` measures the real bytes in the cache |
 | Time to first answer on a mid-range laptop | **Not measured yet.** Needs a real GPU; run `model-test.html` |
 | Memory | ~945 MB GPU is **WebLLM's published estimate, not measured.** `model-test.html` says where to read the real figure |

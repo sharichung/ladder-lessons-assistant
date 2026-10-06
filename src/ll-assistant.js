@@ -143,8 +143,8 @@
 
   // Words that may surround an age, grade or level without naming a skill.
   // A message made only of these plus an age asks for the skill (A5).
-  var TEACH_EN = toSet('student students pupil pupils learner learners kid kids child children son daughter boy boys girl girls class classes group lesson lessons beginner beginners total complete absolute level levels hong kong hk local international school primary secondary form year grade age aged old years yo teach teaching tutor tutoring private one new adult adults teen teens teenager teenagers preschool kindergarten nursery online english esl elementary intermediate advanced upper pre zero mine'.split(' ').map(norm));
-  var TEACH_ZH = ['國際學校', '小朋友', '零基礎', '青少年', '幼稚園', '學生', '細路', '兒子', '女兒', '初學', '初級', '程度', '香港', '本地', '學校', '成人', '大人', '中學', '小學', '新手', '入門', '啱啱', '開始', '補習', '英文', '一對一', '上堂', '課堂', '我哋', '我', '嘅', '個', '有', '一', '班', '堂', '仔', '女', '學', '教', '的', '是', '位', '名', '同', '和', '咗', '緊', '剛', '歲'];
+  var TEACH_EN = toSet('student students pupil pupils learner learners kid kids child children son daughter boy boys girl girls class classes group lesson lessons beginner beginners total complete absolute level levels hong kong hk local international school primary secondary sec form year grade age aged old years yo teach teaching tutor tutoring private one new adult adults teen teens teenage teenager teenagers preschool kindergarten nursery online english esl elementary intermediate advanced upper pre zero mine idea ideas suggestion suggestions suggest recommend recommendation recommendations something anything help practice practise extra fun play stuff she he her his him years-old'.split(' ').map(norm));
+  var TEACH_ZH = ['國際學校', '小朋友', '零基礎', '青少年', '幼稚園', '一對一', '學生', '細路', '兒子', '女兒', '初學', '初級', '程度', '香港', '本地', '學校', '成人', '大人', '中學', '小學', '新手', '入門', '啱啱', '開始', '補習', '英文', '上堂', '課堂', '我哋', '佢哋', '遊戲', '建議', '推介', '介紹', '有冇', '有無', '練習', '而家', '依家', '讀緊', '好玩', '可以', '邊啲', '什麼', '甚麼', '我', '佢', '嘅', '個', '有', '一', '班', '堂', '仔', '女', '學', '教', '的', '是', '係', '讀', '生', '位', '名', '同', '和', '咗', '緊', '剛', '歲', '咩', '乜', '啲', '俾', '畀', '玩', '想', '嗎', '呢', '吖', '啊', '呀', '喎', '嘛', '半'];
 
   // Teacher words that point to a skill (catalogue category id).
   var SKILL_WORDS = {
@@ -195,13 +195,37 @@
     return out;
   }
 
-  var ZH_NUM = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
-  function num(s) { return ZH_NUM[s] || Number(s); }
+  var ZH_DIGIT = { '一': 1, '二': 2, '兩': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+  function num(s) { return ZH_DIGIT[s] || Number(s); }
+  // 七 -> 7, 十 -> 10, 十二 -> 12, 二十 -> 20, 二十一 -> 21
+  function zhNumber(s) {
+    if (s.length === 1 && ZH_DIGIT[s]) return ZH_DIGIT[s];
+    var m = /^([一二兩三四五六七八九])?十([一二三四五六七八九])?$/.exec(s);
+    return m ? (m[1] ? ZH_DIGIT[m[1]] : 1) * 10 + (m[2] ? ZH_DIGIT[m[2]] : 0) : null;
+  }
+  var EN_NUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20 };
+  var EN_NUM_RE = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty';
 
-  var SEP = '(?:-|–|—|to|至|到|~)';
+  // Numbers written as words, only where they are an age or a school year:
+  // "eight year old", "Form One", "Primary Five", 九歲, 小學三年級, 中學一年級.
+  function normaliseNumbers(low) {
+    return low
+      .replace(new RegExp('\\b(' + EN_NUM_RE + ')(?=[\\s-]*(?:years?|yrs?)[\\s-]*olds?\\b|[\\s-]*y\\.?\\/?o\\b)', 'g'), function (w) { return String(EN_NUM[w]); })
+      .replace(new RegExp('\\b(form|primary|secondary|sec|year|grade)\\s+(' + EN_NUM_RE + ')\\b', 'g'), function (m, a, w) { return a + ' ' + EN_NUM[w]; })
+      .replace(/([一二兩三四五六七八九十]{1,3})(?=\s*歲)/g, function (m) { var n = zhNumber(m); return n != null ? String(n) : m; })
+      .replace(/(小學|中學)\s*([一二三四五六1-6])\s*年級/g, function (m, a, n) { return (a === '小學' ? '小' : '中') + n; });
+  }
+
+  var SEP = '(?:-|–|—|~|to|至|到)';
+  var AND = '(?:-|–|—|~|to|and|&|至|到|同|及|和|、)';
+  var AGE_WORD = '\\bage[sd]?\\s*[:：\\-–]?\\s*(?:of\\s*)?';
 
   // Lesson length. Applied first, so "30 min" is never read as an age.
+  // "1 hour 15 min" is one length (75), not two.
   var MINUTE_RULES = [
+    ['(\\d{1,2})\\s*(?:h|hr|hrs|hours?)\\s*(?:and\\s*)?(\\d{1,2})\\s*(?:m|min|mins|minutes?)\\b', function (m) { return Number(m[1]) * 60 + Number(m[2]); }],
+    ['(\\d{1,2})\\s*(?:小時|個鐘)\\s*(?:零)?\\s*(\\d{1,2})\\s*(?:分鐘|分)', function (m) { return Number(m[1]) * 60 + Number(m[2]); }],
+    ['\\b(?:an|one) hour and a half\\b|\\b(?:one and a half|1\\.5) hours?\\b|一個半(?:鐘|小時)', function () { return 90; }],
     ['(\\d{1,3})\\s*-?\\s*(?:min|mins|minutes?)\\b', function (m) { return Number(m[1]); }],
     ['(\\d{1,3})\\s*(?:分鐘|分)', function (m) { return Number(m[1]); }],
     ['(\\d(?:\\.\\d)?)\\s*(?:h|hr|hrs|hours?)\\b', function (m) { return Math.round(Number(m[1]) * 60); }],
@@ -210,79 +234,111 @@
     ['\\b(?:an|one) hour\\b|一小時|一個鐘', function () { return 60; }],
   ];
 
-  // Exact ages and school years (A3). Each returns [min, max]. Ranges come first
-  // so a single-age rule never re-reads part of a range. A third element marks
-  // secondary school years, which also push kid-themed games down.
+  // Exact ages and school years (A3). Each returns [min, max], or null to leave
+  // the text alone. Ranges come first so a single-age rule never re-reads part
+  // of a range. A third element marks secondary school years, which also push
+  // kid-themed games down.
   var AGE_RULES = [
-    ['(\\d{1,2})\\s*' + SEP + '\\s*(\\d{1,2})\\s*(?:years?|yrs?|y\\/?o\\b|歲)', function (m) { return [Number(m[1]), Number(m[2])]; }],
-    ['\\bage[sd]?\\s*(?:of\\s*)?(\\d{1,2})\\s*' + SEP + '\\s*(\\d{1,2})', function (m) { return [Number(m[1]), Number(m[2])]; }],
-    ['\\bage[sd]?\\s*(?:of\\s*)?(\\d{1,2})\\s*\\+', function (m) { return [Number(m[1]), 150]; }],
+    ['(\\d{1,2})\\s*' + AND + '\\s*(\\d{1,2})\\s*(?:years?|yrs?|y\\.?\\/?o\\b\\.?|歲)', function (m) { return [Number(m[1]), Number(m[2])]; }],
+    [AGE_WORD + '(\\d{1,2})\\s*' + AND + '\\s*(\\d{1,2})', function (m) { return [Number(m[1]), Number(m[2])]; }],
+    [AGE_WORD + '(\\d{1,2})\\s*\\+', function (m) { return [Number(m[1]), 150]; }],
     ['(\\d{1,2})\\s*\\+\\s*(?:years?|yrs?|歲)', function (m) { return [Number(m[1]), 150]; }],
     ['(\\d{1,2})\\s*歲\\s*(?:或)?以上', function (m) { return [Number(m[1]), 150]; }],
-    ['(\\d{1,2})\\s*-?\\s*(?:years?[\\s-]*olds?|yrs?[\\s-]*olds?|y\\/?o\\b|歲)', function (m) { return [Number(m[1]), Number(m[1])]; }],
-    ['\\bage[sd]?\\s*(?:of\\s*)?(\\d{1,2})\\b', function (m) { return [Number(m[1]), Number(m[1])]; }],
+    ['(\\d{1,2})\\s*-?\\s*(?:years?[\\s-]*olds?|yrs?[\\s-]*olds?|y\\.?\\/?o\\b\\.?|歲)', function (m) { return [Number(m[1]), Number(m[1])]; }],
+    // "my student is 9 years", but not "for 5 years", "3 years of English" or "2 years ago"
+    ['(\\d{1,2})\\s*(?:years?|yrs?)\\b', function (m, before, after) {
+      if (/\b(for|of|since|about|over|than|last|past|next|in|within)\s*$/.test(before) || /^\s*(of|ago|experience|in|learning|studying|teaching|now)\b/.test(after)) return null;
+      return [Number(m[1]), Number(m[1])];
+    }],
+    [AGE_WORD + '(\\d{1,2})\\b', function (m) { return [Number(m[1]), Number(m[1])]; }],
     // Hong Kong: K1-K3 = 3-6, P1-P6 = 6-12, F1-F6 / S1-S6 / 中一-中六 = 12-18, DSE = 15-18
     ['(^|[^a-z0-9])k\\s*\\.?\\s*([1-3])(?![0-9a-z])', function (m) { return [Number(m[2]) + 2, Number(m[2]) + 3]; }],
     ['(^|[^a-z0-9])(?:primary|p)\\s*\\.?\\s*([1-6])(?![0-9a-z])', function (m) { return [Number(m[2]) + 5, Number(m[2]) + 6]; }],
-    ['(^|[^a-z0-9\'’])(?:secondary|form|f|s)\\s*\\.?\\s*([1-6])(?![0-9a-z])', function (m) { return [Number(m[2]) + 11, Number(m[2]) + 12]; }, true],
-    ['(^|[^其初高大從細最小])小\\s*([一二三四五六1-6])(?![0-9])', function (m) { return [num(m[2]) + 5, num(m[2]) + 6]; }],
-    ['(^|[^其初高集心])中\\s*([一二三四五六1-6])(?![0-9])', function (m) { return [num(m[2]) + 11, num(m[2]) + 12]; }, true],
+    ['(^|[^a-z0-9\'’])(?:secondary|sec|form|f|s)\\s*\\.?\\s*([1-6])(?![0-9a-z])', function (m) { return [Number(m[2]) + 11, Number(m[2]) + 12]; }, true],
+    // 小N / 中N, but not 其中一個, 當中一個, 大小一樣 and similar everyday phrases
+    ['(^|[^其初高大從細最小])小\\s*\\.?\\s*([一二三四五六1-6])(?![0-9個位名隻啲])', function (m) { return [num(m[2]) + 5, num(m[2]) + 6]; }],
+    ['(^|[^其初高集心當班家之])中\\s*\\.?\\s*([一二三四五六1-6])(?![0-9個位名隻啲])', function (m) { return [num(m[2]) + 11, num(m[2]) + 12]; }, true],
     ['(^|[^a-z])(?:hk)?dse(?![a-z])', function () { return [15, 18]; }, true],
     // UK Year n and US Grade n, as before
     ['\\byear\\s*(\\d{1,2})(?![0-9])', function (m) { var n = Number(m[1]); return n >= 1 && n <= 13 ? [n + 5, n + 6] : null; }],
     ['\\bgrade\\s*(\\d{1,2})(?![0-9])', function (m) { var n = Number(m[1]); return n >= 1 && n <= 12 ? [n + 6, n + 7] : null; }],
   ];
 
+  var TEEN = 'teen(?:s|age|ager|agers)?';
+
   // Age words. Used only when no exact age or school year was given.
   var VAGUE_RULES = [
     [/\b(kindergarten|pre-?school|nursery)\b|幼稚園|幼兒/i, [3, 6]],
     [/\b(kids?|child|children|young learners?)\b|小朋友|細路|兒童|小孩/i, [4, 12]],
     [/\b(primary|elementary school)\b|小學/i, [6, 12]],
-    [/\b(teens?|teenagers?)\b|青少年/i, [13, 18]],
+    [new RegExp('\\b' + TEEN + '\\b|青少年', 'i'), [13, 18]],
     [/\b(secondary|high school|middle school)\b|中學/i, [12, 18]],
     [/\b(adults?|grown-?ups?|professionals?|university|college|office workers?|working adults?)\b|成人|大人|上班族|大學|在職/i, [18, 150]],
     [/\b(ielts|toefl|toeic)\b|雅思/i, [16, 150]],
   ];
 
+  var LEVEL_CODE = '(?:pre[-\\s]?a1|a1|a2|b1|b2|c1|c2)';
+  function levelOf(code) { return /^pre/i.test(code) ? 'pre-A1' : code.toUpperCase(); }
   var LEVEL_RULES = [
-    ['(^|[^a-z0-9])(pre-?a1|a1|a2|b1|b2|c1|c2)(?![0-9a-z])', function (m) { return [m[2].toUpperCase().replace(/^PRE-?A1$/, 'pre-A1')]; }],
+    // "A2-B2", "A1 to B1": every level in between
+    ['(^|[^a-z0-9])(' + LEVEL_CODE + ')\\s*' + SEP + '\\s*(' + LEVEL_CODE + ')(?![0-9a-z])', function (m) {
+      var a = LEVELS.indexOf(levelOf(m[2])), b = LEVELS.indexOf(levelOf(m[3]));
+      return LEVELS.slice(Math.min(a, b), Math.max(a, b) + 1);
+    }],
+    ['(^|[^a-z0-9])(' + LEVEL_CODE + ')(?![0-9a-z])', function (m) { return [levelOf(m[2])]; }],
     ['\\b(?:total|complete|absolute)\\s+beginners?\\b|\\bzero english\\b|零基礎|入門', function () { return ['pre-A1', 'A1']; }],
     ['\\bbeginners?\\b|初學|初級|新手', function () { return ['pre-A1', 'A1']; }],
     ['\\belementary\\b(?!\\s*school)', function () { return ['A1', 'A2']; }],
-    ['\\bpre-?intermediate\\b', function () { return ['A2']; }],
-    ['\\bupper[- ]intermediate\\b', function () { return ['B2']; }],
+    ['\\bpre[-\\s]?intermediate\\b', function () { return ['A2']; }],
+    ['\\bupper[-\\s]?intermediate\\b', function () { return ['B2']; }],
     ['\\bintermediate\\b|中級', function () { return ['B1']; }],
     ['\\badvanced\\b|\\bfluent\\b|高級|進階', function () { return ['B2', 'C1']; }],
   ];
 
   // Run rules in order over a working copy. Each match is blanked out so later
   // rules cannot read it again; what is left is used to spot A5 messages.
+  // A rule that returns null leaves its text alone.
   function applyRules(work, rules, onMatch) {
     rules.forEach(function (rule) {
       work = work.replace(new RegExp(rule[0], 'gi'), function () {
-        var m = Array.prototype.slice.call(arguments, 0, -2);
-        onMatch(rule, m);
+        var args = Array.prototype.slice.call(arguments);
+        var str = args[args.length - 1], off = args[args.length - 2];
+        var m = args.slice(0, -2);
         var keep = rule[0].indexOf('(^|') === 0 ? (m[1] || '') : '';
+        var start = off + keep.length;
+        var value = rule[1](m, str.slice(Math.max(0, start - 16), start), str.slice(off + m[0].length, off + m[0].length + 24));
+        if (value == null) return m[0];
+        onMatch(rule, value);
         return keep + new Array(m[0].length - keep.length + 1).join(' ');
       });
     });
     return work;
   }
 
+  // "work" as in English for work, not homework, group work or "work on".
+  function workSignal(low) {
+    var re = /\bwork(?:s|ing)?\b/g, m;
+    while ((m = re.exec(low))) {
+      var before = low.slice(Math.max(0, m.index - 8), m.index), after = low.slice(m.index + m[0].length, m.index + m[0].length + 8);
+      if (/(group|pair|team|class|course|frame|art|home)\s*$/.test(before) || /^\s*(on|out|sheet|book)\b/.test(after)) continue;
+      return true;
+    }
+    return /\bworkplace\b|\boffice\b|上班|職場|工作(?!紙)/.test(low);
+  }
+
   function parseQuery(text) {
     var raw = String(text || '').slice(0, 1000).replace(/https?:\/\/\S+|www\.\S+/gi, ' ');
-    var low = raw.toLowerCase();
+    var low = normaliseNumbers(raw.toLowerCase());
     var minutes = null, exact = null, gradeSecondary = false, levels = toSet([]);
 
-    var work = applyRules(low, MINUTE_RULES, function (rule, m) { if (minutes == null) minutes = rule[1](m); });
-    work = applyRules(work, AGE_RULES, function (rule, m) {
-      var r = rule[1](m);
-      if (!r || r[0] < 3 || r[0] > 99) return;
+    var work = applyRules(low, MINUTE_RULES, function (rule, v) { if (minutes == null) minutes = v; });
+    work = applyRules(work, AGE_RULES, function (rule, r) {
       if (r[0] > r[1]) r = [r[1], r[0]];
+      if (r[0] < 3 || r[0] > 99) return;
       exact = exact ? [Math.min(exact[0], r[0]), Math.max(exact[1], r[1])] : r;
       if (rule[2]) gradeSecondary = true;
     });
-    work = applyRules(work, LEVEL_RULES, function (rule, m) { rule[1](m).forEach(function (l) { levels[l] = true; }); });
+    work = applyRules(work, LEVEL_RULES, function (rule, list) { list.forEach(function (l) { levels[l] = true; }); });
 
     var age = exact ? { min: exact[0], max: exact[1], exact: true } : null;
     if (!age) {
@@ -301,14 +357,16 @@
       for (var j = 0; j < zh.length; j++) if (raw.indexOf(zh[j]) >= 0) { hit = true; zhSkillWords.push(zh[j]); }
       if (hit) skills.push(id);
     });
-    if (/\bgroup of\b|\bclass of\b|\bwhole class\b|\d+\s*(?:students|kids|learners|children)\b|\d+\s*個(?:學生|小朋友|細路)/i.test(raw) && skills.indexOf('group') < 0) skills.push('group');
+    // A head-count ("6 students") is read after school years are taken out, so
+    // "Form 4 students" is a school year, not a group of four.
+    if (/\bgroup of\b|\bclass of\b|\bwhole class\b|\d+\s*(?:students|kids|learners|children)\b|\d+\s*個(?:學生|小朋友|細路)/i.test(work) && skills.indexOf('group') < 0) skills.push('group');
     var reading = Object.keys(READING_EN).some(function (w) { return tokSet[w]; }) || READING_ZH.some(function (w) { return raw.indexOf(w) >= 0; });
 
     // Teen and adult signals push kid-themed games down (A2). "business" and
     // "work" do not count when the teacher states an age under 13.
-    var older = /\b(teens?|teenagers?|secondary|high school|adults?|grown-?ups?|professionals?|university|college|dse|hkdse|ielts|toefl|toeic)\b|青少年|中學|成人|大人|上班族|在職|大學|雅思/i.test(raw) ||
+    var older = new RegExp('\\b(' + TEEN + '|secondary|high school|adults?|grown-?ups?|professionals?|university|college|dse|hkdse|ielts|toefl|toeic)\\b|青少年|中學|成人|大人|上班族|在職|大學|雅思', 'i').test(raw) ||
       gradeSecondary || !!(age && age.exact && age.min >= 13);
-    var business = /\bbusiness\b|商業|商務|\b(?:at|for) work\b|\bworkplace\b|\bwork(?:ing)? english\b|\boffice\b|上班|職場|工作(?!紙)/i.test(raw);
+    var business = /\bbusiness\b|商業|商務/i.test(raw) || workSignal(low);
     var adultSignal = older || (business && !(age && age.max < 13));
 
     // A5: nothing left but teaching words?
@@ -434,6 +492,8 @@
 
   // Shared by keyword mode and AI mode, in a fixed order:
   // hard filter -> top up to the minimum -> kid-themed down -> free first -> trim.
+  var OLDER_TEXT = /\badults?\b|成人|\bteen|secondary|中學|\bielts\b|雅思/i;
+
   function finalize(ctx, startIds) {
     var byId = ctx.cat.byId, q = ctx.q, N = ctx.N, items = [];
     function has(id) { return items.some(function (it) { return itemIds(it).indexOf(id) >= 0; }); }
@@ -466,8 +526,8 @@
     // Kid-themed games below all others for teen and adult queries, never
     // first, never hidden (A2). Older kid-themed games come first (2A).
     var kidNote = false;
-    if (q.adultSignal) {
-      skillPool().forEach(function (id) { if (!byId[id].kid) push(id); });
+    function arrange() {
+      if (!q.adultSignal) return;
       var non = items.filter(function (it) { return !isKid(it); });
       var kids = items.filter(isKid)
         .map(function (it, i) { return { it: it, i: i }; })
@@ -477,19 +537,38 @@
         // No game for older learners in this skill: the best other game goes
         // first, then a note, then the kid-themed games.
         kidNote = true;
-        var best = ctx.scored.filter(function (x) { return !x.g.kid && !has(x.g.id); })[0];
-        if (best) { var bi = itemFor(best.g.id); if (bi) non.push(bi); }
+        var best = bestNonKid();
+        if (best) { var bi = itemFor(best.id); if (bi) non.push(bi); }
       }
-      items = non.slice(0, N.max).concat(kids);
+      items = non.concat(kids);
     }
+    // Best game that is not kid-themed: a keyword match first; failing that,
+    // a game whose catalogue text is about older learners, free first.
+    function bestNonKid() {
+      var hit = ctx.scored.filter(function (x) { return !x.g.kid && !has(x.g.id); })[0];
+      if (hit) return hit.g;
+      var pool = ctx.eligible.filter(function (g) { return !g.kid && !has(g.id); });
+      var older = pool.filter(function (g) { return OLDER_TEXT.test(g.kw + ' ' + g.desc_en); });
+      var byFree = function (a, b) { return (b.tier === 'free') - (a.tier === 'free'); };
+      return older.sort(byFree)[0] || pool.slice().sort(byFree)[0] || null;
+    }
+
+    if (q.adultSignal) skillPool().forEach(function (id) { if (!byId[id].kid) push(id); });
+    arrange();
     items = items.slice(0, N.max);
 
     // Top up to the minimum (A7): strong matches first, then the next best
-    // games of the same skill that pass the filters.
+    // games of the same skill, then any other match, then classroom tools.
     if (items.length < N.min) {
+      var fits = function (g) { return !(q.adultSignal && g.kid); };
       ctx.rel.forEach(function (x) { if (items.length < N.min) push(x.g.id); });
       skillPool().forEach(function (id) { if (items.length < N.min) push(id); });
-      if (q.adultSignal) items.forEach(function (it) { if (isKid(it)) it.kid = true; });
+      ctx.scored.forEach(function (x) { if (items.length < N.min && fits(x.g)) push(x.g.id); });
+      ctx.eligible
+        .filter(function (g) { return g.skill === 'tools' && fits(g); })
+        .sort(function (a, b) { return (b.tier === 'free') - (a.tier === 'free'); })
+        .forEach(function (g) { if (items.length < N.min) push(g.id); });
+      arrange();
     }
 
     // Free first (A8, decision 3A): a free game that passed the filters, hits
@@ -528,11 +607,9 @@
 
     var ctx = buildContext(cat, q);
 
-    if (!q.skills.length && ctx.top < MIN_SCORE) {
-      // An age or level with only teaching words around it: ask for the skill (A5).
-      if ((q.hasAge || q.hasLevel) && q.ageOnly) return withCtx(result(q, { kind: 'ask', askType: 'skill', choices: SIX.slice() }), ctx);
-      return withCtx(result(q, { kind: 'none' }), ctx);
-    }
+    // An age, school year or level with only teaching words around it: ask for the skill (A5).
+    if (!q.skills.length && (q.hasAge || q.hasLevel) && q.ageOnly) return withCtx(result(q, { kind: 'ask', askType: 'skill', choices: SIX.slice() }), ctx);
+    if (!q.skills.length && ctx.top < MIN_SCORE) return withCtx(result(q, { kind: 'none' }), ctx);
 
     // The skill asked for has no game for this age or level.
     if (q.skills.length && !ctx.eligible.some(function (g) { return q.skills.indexOf(g.skill) >= 0; })) {
@@ -547,7 +624,11 @@
       }), ctx);
     }
 
-    var fin = finalize(ctx, ctx.rel.map(function (x) { return x.g.id; }));
+    // Games of the asked-for skill come before keyword matches from other skills (4A).
+    var start = ctx.rel.filter(function (x) { return q.skills.indexOf(x.g.skill) >= 0; })
+      .concat(ctx.rel.filter(function (x) { return q.skills.indexOf(x.g.skill) < 0; }))
+      .map(function (x) { return x.g.id; });
+    var fin = finalize(ctx, start);
     if (!fin.items.length) return withCtx(result(q, { kind: 'none' }), ctx);
     return withCtx(result(q, { kind: 'picks', items: fin.items, kidNote: fin.kidNote, narrow: !q.hasAge && !q.hasLevel }), ctx);
   }
@@ -871,7 +952,9 @@
     var n = document.createElement(tag);
     if (attrs) Object.keys(attrs).forEach(function (k) {
       if (k === 'text') n.textContent = attrs[k];
-      else if (k === 'on') Object.keys(attrs.on).forEach(function (ev) { n.addEventListener(ev, attrs.on[ev]); });
+      // Clicks are dispatched from one window listener (see boot), so pause mode
+      // can keep them from session recorders.
+      else if (k === 'on') Object.keys(attrs.on).forEach(function (ev) { if (ev === 'click') n._llClick = attrs.on[ev]; else n.addEventListener(ev, attrs.on[ev]); });
       else if (attrs[k] !== false && attrs[k] != null) n.setAttribute(k, attrs[k] === true ? '' : attrs[k]);
     });
     (kids || []).forEach(function (c) { if (c) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
@@ -922,8 +1005,25 @@
       if (!inRoot(e.target)) return;
       e.stopImmediatePropagation();
       if (e.key === 'Escape') { close(); return; }
-      if (e.target === S.input && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
+      // keyCode 229: Enter that confirms a Chinese input-method word (Safari order)
+      if (e.target === S.input && e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); submit(); }
     }, true);
+    window.addEventListener('click', function (e) {
+      if (!inRoot(e.target)) return;
+      if (S.clarityMode === 'pause') e.stopImmediatePropagation();
+      for (var n = e.target; n && n !== document; n = n.parentNode) {
+        if (n._llClick) { if (!n.disabled) n._llClick(e); return; }
+        if (n === S.root) return;
+      }
+    }, true);
+    // Pause mode: nothing that happens inside the widget reaches page-level
+    // listeners (pointer, scroll, focus), so a recorder sees no widget activity.
+    ['mousedown', 'mouseup', 'mousemove', 'mouseover', 'mouseout', 'pointerdown', 'pointerup', 'pointermove', 'pointerover', 'pointerout',
+      'touchstart', 'touchmove', 'touchend', 'wheel', 'scroll', 'focus', 'blur', 'focusin', 'focusout', 'dblclick', 'contextmenu', 'selectstart', 'copy', 'paste'].forEach(function (type) {
+      window.addEventListener(type, function (e) {
+        if (S.clarityMode === 'pause' && inRoot(e.target)) e.stopImmediatePropagation();
+      }, { capture: true, passive: true });
+    });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.open) close(); });
 
     // CSS: added once. The root is fixed-position inline, so nothing on the
@@ -1000,6 +1100,7 @@
       // Leave nothing from the conversation in the page before recording resumes.
       S.log.textContent = '';
       S.input.value = '';
+      onInput();
       S.cleared = true;
       applyLabels(S.defaultLang);
       clarityCall('resume');
@@ -1081,12 +1182,23 @@
       })
       .catch(function () {
         S.catLoading = false;
-        var L = t();
-        var retry = el('button', { type: 'button', 'class': 'll-chip', text: L.retry, on: { click: function () { box.remove(); loadCatalogue(); } } });
-        var box = el('div', { 'class': 'll-msg ll-bot' }, [el('p', { text: L.loadFail }), retry]);
-        S.log.appendChild(box);
+        // Kept as a turn, so it survives a language switch and is redrawn on reopen.
+        if (!S.turns.some(function (tu) { return tu.res && tu.res.kind === 'loadFail'; })) {
+          var turn = { who: 'bot', res: { kind: 'loadFail', items: [], ids: [] } };
+          S.turns.push(turn);
+          if (!hiddenLog()) S.log.appendChild(renderTurn(turn));
+        }
       });
   }
+
+  function retryCatalogue() {
+    S.turns = S.turns.filter(function (tu) { return !(tu.res && tu.res.kind === 'loadFail'); });
+    renderLog();
+    loadCatalogue();
+  }
+
+  // In pause mode, nothing is drawn while the panel is closed; it is drawn on reopen.
+  function hiddenLog() { return S.clarityMode === 'pause' && S.cleared; }
 
   // ---------- AI availability ----------
 
@@ -1202,9 +1314,13 @@
   // ---------- conversation ----------
 
   // "7-9" typed in reply to "How old are they?" becomes "Age 7-9" so the parser reads it.
+  // "she's 9" or "9" in reply to "How old are they?" becomes "Age 9".
   function answerPhrase(pending, text) {
-    if (pending.type === 'age' && /^\s*\d{1,2}(\s*[-–~]\s*\d{1,2})?\s*\+?\s*$/.test(text)) return (pending.lang === 'zh' ? text + ' 歲' : 'Age ' + text);
-    return text;
+    if (pending.type !== 'age' || parseQuery(text).hasAge) return text;
+    var m = /(\d{1,2})(\s*[-–~]\s*\d{1,2})?\s*(\+)?/.exec(text);
+    if (!m) return text;
+    var n = m[0].trim();
+    return (pending.lang || S.lang) === 'zh' ? n + ' 歲' : 'Age ' + n;
   }
 
   function choiceLabel(pending, i, lang) {
@@ -1239,8 +1355,12 @@
     }
 
     S.turns.push({ who: 'you', text: text });
-    if (switched) renderLog(); else S.log.appendChild(renderTurn(S.turns[S.turns.length - 1]));
-    if (!S.cat) { S.queued = { text: full, noAsk: noAsk }; return; }
+    if (switched) renderLog(); else if (!hiddenLog()) S.log.appendChild(renderTurn(S.turns[S.turns.length - 1]));
+    if (!S.cat) {
+      S.queued = { text: full, noAsk: noAsk };
+      if (!S.catLoading) retryCatalogue();
+      return;
+    }
     answer(full, noAsk);
   }
 
@@ -1252,16 +1372,16 @@
       S.busy = false; onInput();
       var turn = { who: 'bot', res: res, text: text };
       S.turns.push(turn);
+      setPending(res, text);
+      if (hiddenLog()) return;
       var box = renderTurn(turn);
       S.log.appendChild(box);
-      setPending(res, text);
       // Show the start of the answer, not its end.
       S.log.scrollTop = Math.max(0, box.offsetTop - S.log.offsetTop - 48);
     };
     if (S.ai === 'ready' && S.client) {
       thinking = el('div', { 'class': 'll-msg ll-bot ll-thinking', text: t().thinking });
-      S.log.appendChild(thinking);
-      S.log.scrollTop = S.log.scrollHeight;
+      if (!hiddenLog()) { S.log.appendChild(thinking); S.log.scrollTop = S.log.scrollHeight; }
       recommendAI(S.cat, S.client, text, { noAsk: noAsk }).then(done, function () {
         // Model crashed or timed out: keyword matching from here on, same question answered.
         modelFailed();
@@ -1297,7 +1417,7 @@
       } else {
         var msg = res.askType === 'skill' ? L.askSkill
           : res.askType === 'reading' ? L.noReading
-          : fmt(res.minAge != null ? L.noSkillAge : L.noSkillLevel, { skill: skillLabel(res.skill), age: res.minAge }) + (res.choices.length ? ' ' + L.tryThese : '');
+          : fmt(res.minAge != null ? L.noSkillAge : L.noSkillLevel, { skill: skillLabel(res.skill), age: res.minAge }) + (res.choices.length ? (uiLang() === 'zh' ? '' : ' ') + L.tryThese : '');
         box.appendChild(el('p', { text: msg }));
         pend.type = 'skill'; pend.choices = res.choices;
       }
@@ -1308,7 +1428,7 @@
       res.items.forEach(function (it) {
         if (it.kid && res.kidNote && !noted) {
           noted = true;
-          list.appendChild(el('li', { 'class': 'll-note' }, [fmt(L.kidNote, { skill: skillLabel(S.cat.byId[itemIds(it)[0]].skill) })]));
+          list.appendChild(el('li', { 'class': 'll-small' }, [fmt(L.kidNote, { skill: skillLabel(S.cat.byId[itemIds(it)[0]].skill) })]));
         }
         list.appendChild(card(it));
       });
@@ -1317,6 +1437,9 @@
         box.appendChild(el('p', { 'class': 'll-small', text: L.askAge }));
         box.appendChild(choiceChips({ type: 'age', text: turn.text, choices: [0, 1, 2, 3, 4] }, true));
       }
+    } else if (res.kind === 'loadFail') {
+      box.appendChild(el('p', { text: L.loadFail }));
+      box.appendChild(el('button', { type: 'button', 'class': 'll-chip', text: L.retry, on: { click: retryCatalogue } }));
     } else {
       box.appendChild(el('p', { text: L.noMatch }));
     }
@@ -1331,7 +1454,7 @@
       wrap.appendChild(el('button', {
         type: 'button', 'class': 'll-chip', disabled: !active,
         on: { click: function () { S.pending = { type: pending.type, text: pending.text, choices: pending.choices, lang: S.lang }; submit(choiceLabel(pending, i)); } },
-      }, numbered ? [el('span', { 'class': 'll-n', 'aria-hidden': 'true', text: String(i + 1) }), label] : [label]));
+      }, numbered ? [el('span', { 'class': 'll-tag', 'aria-hidden': 'true', text: String(i + 1) }), label] : [label]));
     });
     return wrap;
   }
@@ -1365,15 +1488,17 @@
     var L = t(), zh = S.lang === 'zh', byId = S.cat.byId;
     if (it.family) {
       var members = it.ids.map(function (id) { return byId[id]; });
-      var levels = el('div', { 'class': 'll-levels' });
+      // Same class names as every other card and chip, so the page code does not
+      // single out this card.
+      var levels = el('div', { 'class': 'll-tags' });
       members.forEach(function (g) {
         levels.appendChild(el('button', {
-          type: 'button', 'class': 'll-level', 'aria-label': g.title,
+          type: 'button', 'class': 'll-chip', 'aria-label': g.title,
           on: { click: function () { openGame(g); } },
         }, [levelText(g), el('span', { 'class': 'll-ext', 'aria-hidden': 'true', text: ' ↗' })]));
       });
       return el('li', { 'class': 'll-card' }, [
-        el('p', { 'class': 'll-card-name', text: it.family }),
+        el('p', { 'class': 'll-card-title', text: it.family }),
         tags(members[0], it, L),
         el('p', { 'class': 'll-small', text: L.pickLevel }),
         levels,
@@ -1408,7 +1533,7 @@
         return S.turns.map(function (tu) {
           if (tu.who === 'you') return { who: 'you', text: tu.text };
           var r = tu.res;
-          return { who: 'bot', kind: r.kind, askType: r.askType || null, source: r.source, ids: r.ids.slice(), items: JSON.parse(JSON.stringify(r.items)), kidNote: !!r.kidNote };
+          return { who: 'bot', kind: r.kind, askType: r.askType || null, source: r.source || null, ids: (r.ids || []).slice(), items: JSON.parse(JSON.stringify(r.items || [])), kidNote: !!r.kidNote };
         });
       },
       // Tests only: swap the model client for a fake.
