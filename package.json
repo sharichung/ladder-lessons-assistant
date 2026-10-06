@@ -5,11 +5,13 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node scripts/build.mjs && node tests/unit.test.mjs && node tests/e2e.test.mjs",
-    "serve": "node scripts/serve.mjs"
+    "test": "node scripts/build.mjs && node tests/unit.test.mjs && node tests/e2e.test.mjs && node tests/compare.mjs",
+    "serve": "node scripts/serve.mjs",
+    "compare": "node tests/compare.mjs"
   },
   "devDependencies": {
     "@mlc-ai/web-llm": "0.2.85",
+    "clarity-js": "0.8.71",
     "playwright-core": "^1.48.0"
   }
 }

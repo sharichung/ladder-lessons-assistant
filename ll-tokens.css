@@ -1,0 +1,35 @@
+/* Copied from games/library.html :root on 2026-10-05. Source of truth is library.html. */
+:root{
+  --coral:#FF6B6B; --coral-dark:#FF8E53; --coral-pale:rgba(255,107,107,.12);
+  --teal:#4ECDC4; --teal-dark:#44A08D; --teal-pale:rgba(78,205,196,.14);
+  --yellow:#FFE66D; --yellow-deep:#FFC93C;
+  --ink:#2C3E50; --ink-soft:#5A6C7D;
+  --cream:#FFF9F0; --cream-deep:#F6EDE0;
+  --success:#22C55E; --warn:#F59E0B; --error:#E74C3C;
+  --line:#E5E7EB; --muted:#9CA3AF;
+  --purple-1:#667EEA; --purple-2:#764BA2;
+  --grad-cta:linear-gradient(135deg,#FF6B6B 0%,#FF8E53 100%);
+
+  --cat-phonics:#FF6B6B; --cat-vocab:#FF8E53; --cat-grammar:#FFC93C;
+  --cat-speaking:#4ECDC4; --cat-listening:#44A08D; --cat-writing:#667EEA;
+  --cat-finance:#764BA2; --cat-group:#22C55E; --cat-tools:#0EA5E9; --cat-life:#9333EA;
+  /* tier 色 ≠ 分類色。免費係方案，唔係主題 —— 唔可以再叫 --cat-* */
+  --tier-free:#F472B6;
+  /* 珊瑚做文字用呢個 —— #FF6B6B 對白只有 2.78:1，AA 都過唔到 */
+  --coral-ink:#C9453F;
+
+  --r-rung:12px; --r-sm:8px; --r-md:16px; --r-lg:24px; --r-pill:9999px;
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:20px; --s-6:24px; --s-7:28px;
+  /* ⚠️ 2026-09-13：--s-5 同 --s-7 本來冇定義,但檔入面三處用緊。
+     CSS 對住未定義嘅 var() 係靜靜地丟掉成條宣告 —— 冇 error、
+     冇 warning,連 !important 都救唔到。結果：
+       · #llGate 個 margin-top 由頭到尾冇生效（email 閘貼住上面）
+       · .cat--free 個 padding-top 同樣冇生效
+     Shari 2026-09-13 用眼喺 .faq 度捉到第三個。補返定義,三處一次過啱。
+     ⚠️ 加新間距一定要落呢度,唔好喺 call site 寫 var(--s-9) 咁樣賭。*/ --s-8:32px; --s-12:48px;
+  --sh-rung:0 4px 0 rgba(44,62,80,.14);
+  --sh-card:0 8px 24px rgba(44,62,80,.10);
+  --sh-lift:0 14px 34px rgba(44,62,80,.14);
+  --ff-head:'Fredoka','Noto Sans HK','PingFang HK','Microsoft JhengHei',sans-serif;
+  --ff-body:'Nunito','Noto Sans HK','PingFang HK','Microsoft JhengHei',sans-serif;
+}

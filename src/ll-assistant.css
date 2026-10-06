@@ -1,22 +1,40 @@
 /* Ladder Lessons game finder. Everything is scoped under #ll-assistant.
-   Brand colours: override these variables on #ll-assistant in the site CSS. */
+   Colours, radii, shadows and fonts are the site's own tokens (ll-tokens.css,
+   copied from games/library.html). The widget reads them from the page's :root;
+   each fallback below is the exact value from ll-tokens.css, so the widget still
+   looks right on a page without them. Only white is added, for cards (B4).
+   tests/unit.test.mjs fails if a colour or token name here is not in ll-tokens.css. */
 #ll-assistant {
-  --ll-accent: #1f5f8b;
-  --ll-accent-ink: #ffffff;
-  --ll-bg: #ffffff;
-  --ll-ink: #1d2433;
-  --ll-muted: #5b6475;
-  --ll-line: #e3e7ee;
-  --ll-soft: #f4f6f9;
-  --ll-free: #1e7a46;
-  --ll-free-bg: #e5f4ea;
-  --ll-paid: #7a4b00;
-  --ll-paid-bg: #fdf1dc;
+  --ll-coral: var(--coral, #FF6B6B);
+  --ll-coral-dark: var(--coral-dark, #FF8E53);
+  --ll-coral-pale: var(--coral-pale, rgba(255,107,107,.12));
+  --ll-coral-ink: var(--coral-ink, #C9453F);
+  --ll-teal: var(--teal, #4ECDC4);
+  --ll-yellow: var(--yellow, #FFE66D);
+  --ll-ink: var(--ink, #2C3E50);
+  --ll-ink-soft: var(--ink-soft, #5A6C7D);
+  --ll-cream: var(--cream, #FFF9F0);
+  --ll-cream-deep: var(--cream-deep, #F6EDE0);
+  --ll-line: var(--line, #E5E7EB);
+  --ll-muted: var(--muted, #9CA3AF);
+  --ll-purple-1: var(--purple-1, #667EEA);
+  --ll-tier-free: var(--tier-free, #F472B6);
+  --ll-grad-cta: var(--grad-cta, linear-gradient(135deg,#FF6B6B 0%,#FF8E53 100%));
+  --ll-r-rung: var(--r-rung, 12px);
+  --ll-r-sm: var(--r-sm, 8px);
+  --ll-r-md: var(--r-md, 16px);
+  --ll-r-pill: var(--r-pill, 9999px);
+  --ll-sh-rung: var(--sh-rung, 0 4px 0 rgba(44,62,80,.14));
+  --ll-sh-card: var(--sh-card, 0 8px 24px rgba(44,62,80,.10));
+  --ll-sh-lift: var(--sh-lift, 0 14px 34px rgba(44,62,80,.14));
+  --ll-ff-head: var(--ff-head, 'Fredoka','Noto Sans HK','PingFang HK','Microsoft JhengHei',sans-serif);
+  --ll-ff-body: var(--ff-body, 'Nunito','Noto Sans HK','PingFang HK','Microsoft JhengHei',sans-serif);
+  /* What the teacher types uses system fonts only: a web font served in
+     character ranges would fetch files based on the characters typed. */
+  --ll-ff-typed: system-ui, -apple-system, 'Segoe UI', 'PingFang HK', 'Microsoft JhengHei', sans-serif;
   --ll-x: 16px;
   --ll-y: 16px;
-  --ll-radius: 14px;
-  --ll-font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", "PingFang HK", "Microsoft JhengHei", sans-serif;
-  font-family: var(--ll-font);
+  font-family: var(--ll-ff-body);
   font-size: 15px;
   line-height: 1.45;
   color: var(--ll-ink);
@@ -24,25 +42,32 @@
 #ll-assistant[hidden] { display: none !important; }
 #ll-assistant *, #ll-assistant *::before, #ll-assistant *::after { box-sizing: border-box; }
 #ll-assistant button, #ll-assistant textarea { font: inherit; color: inherit; }
+#ll-assistant button:focus-visible { outline: 3px solid var(--ll-ink); outline-offset: 2px; }
+/* The text box is focused whenever the panel opens, so it only changes its border colour. */
+#ll-assistant .ll-input:focus { outline: none; border-color: var(--ll-coral-ink); }
+
+/* Site CTA (_brand/ll-funnel.css .llf__btn): coral gradient, ink text, ink border */
+#ll-assistant .ll-cta {
+  min-height: 48px; cursor: pointer;
+  font-family: var(--ll-ff-head); font-weight: 700; font-size: 16px; letter-spacing: .01em;
+  padding: 11px 26px; border: 3px solid var(--ll-ink); border-radius: var(--ll-r-pill);
+  background: var(--ll-grad-cta); color: var(--ll-ink); box-shadow: var(--ll-sh-rung);
+  transition: transform .12s, box-shadow .12s;
+}
+#ll-assistant .ll-cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--ll-sh-lift); }
+#ll-assistant .ll-cta:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+#ll-assistant .ll-cta:disabled { background: var(--ll-line); color: var(--ll-ink-soft); border-color: var(--ll-muted); box-shadow: none; cursor: default; }
+#ll-assistant .ll-cta-block { display: block; width: 100%; margin: 0 0 6px; padding: 9px 16px; }
 
 /* Launcher */
 #ll-assistant .ll-launcher {
   position: absolute;
   bottom: calc(var(--ll-y) + env(safe-area-inset-bottom, 0px));
   display: inline-flex; align-items: center; gap: 8px;
-  height: 44px; padding: 0 18px;
-  border: 0; border-radius: 999px;
-  background: var(--ll-accent); color: var(--ll-accent-ink);
-  font-weight: 600; white-space: nowrap; cursor: pointer;
-  box-shadow: 0 4px 14px rgba(15, 30, 60, .22);
+  padding: 0 20px; white-space: nowrap;
 }
 #ll-assistant.ll-pos-right .ll-launcher { right: var(--ll-x); }
 #ll-assistant.ll-pos-left .ll-launcher { left: var(--ll-x); }
-#ll-assistant .ll-launcher:hover { filter: brightness(1.08); }
-#ll-assistant .ll-launcher:focus-visible,
-#ll-assistant button:focus-visible,
-#ll-assistant a:focus-visible,
-#ll-assistant textarea:focus-visible { outline: 3px solid #f2b705; outline-offset: 2px; }
 #ll-assistant.ll-is-open .ll-launcher { display: none; }
 
 /* Panel */
@@ -53,91 +78,128 @@
   height: min(600px, calc(100vh - 2 * var(--ll-y)));
   height: min(600px, calc(100dvh - 2 * var(--ll-y)));
   display: flex; flex-direction: column;
-  background: var(--ll-bg);
-  border: 1px solid var(--ll-line); border-radius: var(--ll-radius);
-  box-shadow: 0 12px 40px rgba(15, 30, 60, .25);
+  background: var(--ll-cream);
+  border-radius: var(--ll-r-md);
+  box-shadow: var(--ll-sh-lift);
   overflow: hidden;
 }
 #ll-assistant .ll-panel[hidden] { display: none; }
 #ll-assistant.ll-pos-right .ll-panel { right: var(--ll-x); }
 #ll-assistant.ll-pos-left .ll-panel { left: var(--ll-x); }
 
-#ll-assistant .ll-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 4px 16px; }
-#ll-assistant .ll-title { margin: 0; font-size: 16px; font-weight: 700; }
+/* Header, privacy line, mode line, offer and input never shrink; only the conversation scrolls. */
+#ll-assistant .ll-head, #ll-assistant .ll-privacy, #ll-assistant .ll-modeline, #ll-assistant .ll-offer, #ll-assistant .ll-composer { flex: 0 0 auto; }
+#ll-assistant .ll-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 2px 16px; }
+#ll-assistant .ll-title { margin: 0; font-family: var(--ll-ff-head); font-size: 18px; font-weight: 600; }
+/* Chinese headings: weight 700 and 0.02em (style guide §2). data-l="2" is Chinese. */
+#ll-assistant .ll-panel[data-l="2"] .ll-title,
+#ll-assistant .ll-panel[data-l="2"] .ll-offer-title,
+#ll-assistant .ll-panel[data-l="2"] .ll-card-title,
+#ll-assistant .ll-panel[data-l="2"] .ll-card-name { font-weight: 700; letter-spacing: .02em; }
 #ll-assistant .ll-close {
-  width: 36px; height: 36px; border: 0; border-radius: 50%;
-  background: transparent; font-size: 24px; line-height: 1; cursor: pointer; color: var(--ll-muted);
+  width: 36px; height: 36px; border: 0; border-radius: var(--ll-r-pill);
+  background: transparent; font-size: 24px; line-height: 1; cursor: pointer; color: var(--ll-ink-soft);
 }
-#ll-assistant .ll-close:hover { background: var(--ll-soft); }
-#ll-assistant .ll-notice { margin: 0 16px 8px; font-size: 12.5px; line-height: 1.35; color: var(--ll-muted); }
-/* Header, notice, offer and input never shrink; only the conversation scrolls. */
-#ll-assistant .ll-head, #ll-assistant .ll-notice, #ll-assistant .ll-offer, #ll-assistant .ll-form { flex: 0 0 auto; }
+#ll-assistant .ll-close:hover { background: var(--ll-cream-deep); }
+#ll-assistant .ll-privacy {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin: 0 16px 2px; font-size: 13.5px; font-weight: 700; line-height: 1.35; color: var(--ll-ink);
+}
+#ll-assistant .ll-lock { flex: 0 0 auto; margin-top: 2px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+#ll-assistant .ll-modeline { margin: 0 16px 8px 36px; font-size: 12.5px; line-height: 1.35; color: var(--ll-ink-soft); }
 
 /* AI offer */
 #ll-assistant .ll-offer {
-  margin: 0 12px 8px; padding: 12px; border-radius: 10px;
-  background: var(--ll-soft); border: 1px solid var(--ll-line);
+  margin: 0 12px 8px; padding: 12px; border-radius: var(--ll-r-rung);
+  background: #fff; box-shadow: var(--ll-sh-card);
 }
 #ll-assistant .ll-offer[hidden] { display: none; }
 #ll-assistant .ll-offer p { margin: 0 0 8px; }
-#ll-assistant .ll-offer-title { font-weight: 700; }
-#ll-assistant .ll-offer-min { padding: 6px 12px; background: transparent; border-style: dashed; }
+#ll-assistant .ll-offer-title { font-family: var(--ll-ff-head); font-weight: 600; }
+#ll-assistant .ll-offer-min { padding: 6px 12px; box-shadow: none; background: transparent; }
 #ll-assistant .ll-offer-min p { margin: 0; }
 #ll-assistant .ll-btn {
-  display: inline-block; min-height: 40px; padding: 8px 14px; margin: 0 0 6px;
-  border-radius: 10px; border: 1px solid var(--ll-line); background: var(--ll-bg);
-  font-weight: 600; cursor: pointer; text-align: center;
+  display: inline-block; min-height: 40px; padding: 8px 16px; margin: 0 0 6px;
+  border-radius: var(--ll-r-pill); border: 2px solid var(--ll-line); background: #fff;
+  font-family: var(--ll-ff-head); font-weight: 600; cursor: pointer;
 }
-#ll-assistant .ll-btn-primary { width: 100%; background: var(--ll-accent); color: var(--ll-accent-ink); border-color: var(--ll-accent); }
-#ll-assistant .ll-link { border: 0; background: none; padding: 4px 0; color: var(--ll-accent); text-decoration: underline; cursor: pointer; font-size: 13px; }
-#ll-assistant .ll-small { font-size: 12.5px; color: var(--ll-muted); }
+#ll-assistant .ll-link { border: 0; background: none; padding: 4px 0; color: var(--ll-coral-ink); text-decoration: underline; cursor: pointer; font-size: 13px; }
+#ll-assistant .ll-small { font-size: 12.5px; color: var(--ll-ink-soft); }
 #ll-assistant .ll-progress-text { font-size: 13px; }
-#ll-assistant .ll-bar { height: 8px; margin: 0 0 10px; border-radius: 99px; background: var(--ll-line); overflow: hidden; }
-#ll-assistant .ll-bar span { display: block; height: 100%; width: 0; background: var(--ll-accent); transition: width .3s; }
+/* Progress bar: 12px, teal fill on the line colour (style guide §3) */
+#ll-assistant .ll-bar { height: 12px; margin: 0 0 10px; border-radius: var(--ll-r-pill); background: var(--ll-line); overflow: hidden; }
+#ll-assistant .ll-bar span { display: block; height: 100%; width: 0; background: var(--ll-teal); transition: width .3s; }
 
 /* Conversation */
 #ll-assistant .ll-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 12px 8px; overscroll-behavior: contain; }
-#ll-assistant .ll-msg { margin: 8px 0; padding: 10px 12px; border-radius: 12px; }
+#ll-assistant .ll-msg { margin: 8px 0; padding: 10px 12px; border-radius: var(--ll-r-rung); }
 #ll-assistant .ll-msg p { margin: 0 0 6px; }
 #ll-assistant .ll-msg p:last-child { margin-bottom: 0; }
-#ll-assistant .ll-bot { background: var(--ll-soft); }
-#ll-assistant .ll-you { margin-left: 15%; background: var(--ll-accent); color: var(--ll-accent-ink); white-space: pre-wrap; word-break: break-word; }
-#ll-assistant .ll-thinking { color: var(--ll-muted); font-style: italic; }
+#ll-assistant .ll-bot { background: transparent; padding-left: 0; padding-right: 0; }
+#ll-assistant .ll-you {
+  margin-left: 15%; background: var(--ll-coral-pale); color: var(--ll-ink);
+  font-family: var(--ll-ff-typed); white-space: pre-wrap; word-break: break-word;
+}
+#ll-assistant .ll-thinking { color: var(--ll-ink-soft); font-style: italic; }
 #ll-assistant .ll-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 #ll-assistant .ll-chip {
-  min-height: 34px; padding: 5px 12px; border-radius: 99px;
-  border: 1px solid var(--ll-line); background: var(--ll-bg); cursor: pointer; font-size: 13.5px; text-align: left;
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 34px; padding: 5px 12px; border-radius: var(--ll-r-pill);
+  border: 2px solid var(--ll-line); background: #fff; cursor: pointer; font-size: 13.5px; font-weight: 600; text-align: left;
 }
-#ll-assistant .ll-chip:hover { border-color: var(--ll-accent); }
+#ll-assistant .ll-chip:hover:not(:disabled) { border-color: var(--ll-coral-ink); }
+#ll-assistant .ll-chip:disabled { cursor: default; color: var(--ll-ink-soft); }
+#ll-assistant .ll-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; border-radius: var(--ll-r-pill);
+  background: var(--ll-cream-deep); font-family: var(--ll-ff-head); font-size: 12px; font-weight: 600;
+}
 
-/* Game cards */
-#ll-assistant .ll-cards { list-style: none; margin: 6px 0 0; padding: 0; counter-reset: ll; }
-#ll-assistant .ll-card { margin: 0 0 8px; padding: 10px 12px; background: var(--ll-bg); border: 1px solid var(--ll-line); border-radius: 10px; }
+/* Game cards: white, soft shadow, no outline (B4) */
+#ll-assistant .ll-cards { list-style: none; margin: 6px 0 0; padding: 0; }
+#ll-assistant .ll-card { margin: 0 0 10px; padding: 12px 14px; background: #fff; border-radius: var(--ll-r-rung); box-shadow: var(--ll-sh-card); }
 #ll-assistant .ll-card:last-child { margin-bottom: 0; }
-#ll-assistant .ll-card-title { font-weight: 700; color: var(--ll-accent); text-decoration: none; }
-#ll-assistant .ll-card-title::after { content: " ↗"; font-weight: 400; }
+#ll-assistant .ll-note { margin: 4px 2px 10px; font-size: 13px; color: var(--ll-ink-soft); }
+#ll-assistant .ll-card-title {
+  display: inline; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  font-family: var(--ll-ff-head); font-size: 16px; font-weight: 600; color: var(--ll-coral-ink);
+}
 #ll-assistant .ll-card-title:hover { text-decoration: underline; }
-#ll-assistant .ll-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
-#ll-assistant .ll-tag { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--ll-soft); color: var(--ll-muted); }
-#ll-assistant .ll-tag-free { background: var(--ll-free-bg); color: var(--ll-free); font-weight: 600; }
-#ll-assistant .ll-tag-paid { background: var(--ll-paid-bg); color: var(--ll-paid); font-weight: 600; }
+#ll-assistant .ll-card-name { margin: 0; font-family: var(--ll-ff-head); font-size: 16px; font-weight: 600; }
+#ll-assistant .ll-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; }
+#ll-assistant .ll-tag { font-size: 12px; padding: 1px 8px; border-radius: var(--ll-r-pill); background: var(--ll-cream-deep); color: var(--ll-ink-soft); }
+/* Plan labels: same as .tier on the library page. data-t: 1 free, 2 parent, 3 teacher. */
+#ll-assistant .ll-tier {
+  font-family: var(--ll-ff-head); font-weight: 600; font-size: 11px; letter-spacing: .04em;
+  padding: 3px 10px; border-radius: var(--ll-r-pill); border: 2px solid var(--ll-ink); color: var(--ll-ink);
+}
+#ll-assistant .ll-tier[data-t="1"] { background: var(--ll-tier-free); border-color: var(--ll-ink); }
+#ll-assistant .ll-tier[data-t="2"] { background: var(--ll-yellow); }
+#ll-assistant .ll-tier[data-t="3"] { background: var(--ll-purple-1); border-color: var(--ll-purple-1); }
 #ll-assistant .ll-desc {
-  font-size: 13.5px; color: var(--ll-muted);
+  font-size: 13.5px; color: var(--ll-ink-soft); margin: 0;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-#ll-assistant .ll-how { font-size: 13.5px; }
+#ll-assistant .ll-how { font-size: 13.5px; margin: 6px 0 0; }
+#ll-assistant .ll-levels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+#ll-assistant .ll-level {
+  min-height: 34px; padding: 4px 14px; border-radius: var(--ll-r-pill);
+  border: 2px solid var(--ll-line); background: #fff; cursor: pointer;
+  font-family: var(--ll-ff-head); font-weight: 600; color: var(--ll-coral-ink);
+}
+#ll-assistant .ll-level:hover { border-color: var(--ll-coral-ink); }
 
 /* Input */
-#ll-assistant .ll-form { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 12px; border-top: 1px solid var(--ll-line); }
+#ll-assistant .ll-composer { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 12px; border-top: 1px solid var(--ll-line); }
 #ll-assistant .ll-input {
-  flex: 1 1 auto; min-height: 44px; max-height: 120px; resize: none;
-  padding: 10px 12px; border: 1px solid var(--ll-line); border-radius: 10px; background: var(--ll-bg);
+  flex: 1 1 auto; min-height: 48px; max-height: 120px; resize: none;
+  padding: 11px 12px; border: 2px solid var(--ll-ink-soft); border-radius: var(--ll-r-rung); background: #fff;
+  font-family: var(--ll-ff-typed);
   font-size: 16px; /* 16px stops iOS zooming in */
 }
-#ll-assistant .ll-send {
-  flex: 0 0 auto; min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px;
-  background: var(--ll-accent); color: var(--ll-accent-ink); font-weight: 600; cursor: pointer;
-}
-#ll-assistant .ll-send:disabled { opacity: .45; cursor: default; }
+#ll-assistant .ll-send { flex: 0 0 auto; padding: 0 18px; }
 
-@media (prefers-reduced-motion: reduce) { #ll-assistant .ll-bar span { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  #ll-assistant .ll-bar span, #ll-assistant .ll-cta { transition: none; }
+  #ll-assistant .ll-cta:hover:not(:disabled), #ll-assistant .ll-cta:active:not(:disabled) { transform: none; }
+}

@@ -22,15 +22,23 @@
   #email-gate[hidden] { display: none; }
   #email-gate .box { background: #fff; border-radius: 14px; padding: 24px; max-width: 360px; margin: 16px; }
 </style>
-<!-- Same as on the live site: a page that already has analytics. Here gtag only logs to the panel. -->
+<!-- Same as on the live site: a page that already has analytics. Here gtag and
+     clarity only log to the panel, so you can see exactly what the widget sends. -->
 <script>
   window.__events = [];
-  window.gtag = function () {
-    var a = Array.prototype.slice.call(arguments);
-    window.__events.push(a);
+  window.__clarity = [];
+  function __log(kind, a) {
     var out = document.getElementById('events');
-    if (out) out.textContent += JSON.stringify(a) + '\n';
-  };
+    if (out) out.textContent += kind + ' ' + JSON.stringify(a) + '\n';
+  }
+  window.gtag = function () { var a = Array.prototype.slice.call(arguments); window.__events.push(a); __log('gtag', a); };
+  window.clarity = function () { var a = Array.prototype.slice.call(arguments); window.__clarity.push(a); __log('clarity', a); };
+  // ?site=1 loads the library page's tokens and Google Fonts, to check the look.
+  // Left off by default so the automated tests make no outside requests.
+  if (/[?&]site=1\b/.test(location.search)) {
+    document.write('<link rel="stylesheet" href="ll-tokens.css">' +
+      '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Noto+Sans+HK:wght@400;700&display=swap">');
+  }
 </script>
 </head>
 <body>
@@ -40,11 +48,12 @@
     <h2>Test controls (demo only, not part of the widget)</h2>
     <button type="button" id="check">Check this device</button>
     <a href="?llai=off">Reload in keyword-only mode</a>
+    <a href="?site=1">Reload with the site's fonts and colours</a>
     <a href="?">Reload normally</a>
     <button type="button" id="reset">Delete the downloaded AI from this browser</button>
     <button type="button" id="gate">Show the email gate</button>
     <pre id="device">Device check: not run yet.</pre>
-    <pre id="events">Analytics events (anonymous counts only):
+    <pre id="events">Analytics calls from the widget (nothing from the conversation):
 </pre>
   </section>
 
