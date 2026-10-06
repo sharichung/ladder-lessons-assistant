@@ -6,7 +6,7 @@
 <title>Model test</title>
 <style>
   body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f6f7fb; color: #1d2433; }
-  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   section { background: #fff; border: 1px solid #e3e7ee; border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
   h2 { font-size: 16px; margin: 0 0 8px; }
@@ -15,9 +15,9 @@
   button:disabled { opacity: .45; cursor: default; }
   .bar { height: 10px; background: #e3e7ee; border-radius: 99px; overflow: hidden; margin: 8px 0; }
   .bar span { display: block; height: 100%; width: 0; background: #1f5f8b; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   th, td { text-align: left; vertical-align: top; border-bottom: 1px solid #eef0f4; padding: 6px; }
-  td code { font-size: 12px; word-break: break-all; }
+  td code { font-size: 11.5px; word-break: break-all; }
   .pass { color: #1e7a46; font-weight: 700; } .fail { color: #b3261e; font-weight: 700; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
   dt { color: #5b6475; } dd { margin: 0; }
@@ -27,7 +27,7 @@
 <body>
 <main>
   <h1>Ladder Lessons game finder · model test</h1>
-  <p>Runs the 15 fixed questions through the real on-device model, using the same code as the widget. Use desktop Chrome. Serve the repo with <code>npm run serve</code> and open <code>http://localhost:8080/tests/model-test.html</code>.</p>
+  <p>Runs every fixed question through the real on-device model with the same code as the widget, and through the previous version (before this round of fixes) with the same model, so you get a before/after table for AI mode and keyword mode. Use desktop Chrome in a normal window. Start the server in the project folder and open <code>http://localhost:8080/tests/model-test.html</code>.</p>
 
   <section>
     <h2>1. This device</h2>
@@ -36,19 +36,20 @@
 
   <section>
     <h2>2. Load the model</h2>
-    <p id="load-note">The first run downloads the model once. Reload the page and press the button again to measure a cached start.</p>
+    <p>The first run downloads the model once. Reload the page and press the button again to measure a cached start.</p>
     <button id="load" disabled>Load model</button>
     <div class="bar"><span id="bar"></span></div>
     <p id="load-status"></p>
   </section>
 
   <section>
-    <h2>3. Run the 15 questions</h2>
+    <h2>3. Run the questions</h2>
     <button id="run" disabled>Run tests</button>
     <button id="copy" class="secondary" disabled>Copy report</button>
+    <p id="progress"></p>
     <dl id="summary"></dl>
     <table>
-      <thead><tr><th>#</th><th>Question</th><th>Model output</th><th>Shown</th><th>Source</th><th>ms</th><th>Check</th></tr></thead>
+      <thead><tr><th>#</th><th>Question</th><th>Keyword before</th><th>Keyword after</th><th>AI before</th><th>AI after</th><th>AI after shows</th><th>Model reply (after)</th><th>ms</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </section>
@@ -59,17 +60,30 @@
 </main>
 
 <script src="../dist/ll-assistant/ll-assistant.js" data-no-ui></script>
+<script src="baseline/ll-assistant.v1.js"></script>
+<script src="check.js"></script>
 <script>
 (async function () {
-  var A = window.LLAssistant, core = A.core, X = A.internals;
+  var A = window.LLAssistant, core = A.core, X = A.internals, V1 = window.LLAssistantV1.core, check = window.LLCheck.checkQuestion;
   var BASE = '../dist/ll-assistant/';
   var $ = function (id) { return document.getElementById(id); };
-  var report = { device: {}, load: {}, questions: [], summary: {} };
+  var report = { device: {}, load: {}, summary: {}, questions: [] };
 
   var cat = core.prepareCatalogue(await (await fetch(BASE + 'catalogue.compact.json')).json());
-  var questions = (await (await fetch('questions.json')).json()).questions;
-  var realUrls = new Set(cat.games.map(function (g) { return g.url; }));
+  var catV1 = V1.prepareCatalogue(await (await fetch('baseline/catalogue.v1.json')).json());
+  var questions = (await (await fetch('questions.json')).json()).questions.filter(function (q) { return q.expect !== 'nothing-sent'; });
 
+  // The old code returned age bands; turn them into a range so parseAge can be compared (same as tests/compare.mjs).
+  var BANDS = { '4-6': [4, 6], '7-9': [7, 9], '10-12': [10, 12], '13-17': [13, 17], adult: [18, 150] };
+  function normaliseV1(r) {
+    var bands = (r.q && r.q.ages) || [];
+    var age = bands.length ? { min: Math.min.apply(null, bands.map(function (b) { return BANDS[b][0]; })), max: Math.max.apply(null, bands.map(function (b) { return BANDS[b][1]; })) } : null;
+    return { kind: r.kind, askType: r.kind === 'ask' ? 'age' : null, items: (r.ids || []).map(function (id) { return { id: id }; }), q: { age: age }, kidNote: false, raw: r.raw };
+  }
+  function shows(r) {
+    if (r.kind !== 'picks') return r.kind + (r.askType ? ':' + r.askType : '');
+    return r.items.map(function (it) { return it.ids ? 'Ladder Vocabulary [' + it.ids.map(function (id) { return cat.byId[id].level_min; }).join('·') + ']' : cat.byId[it.id].title + (it.kid ? ' (kid)' : ''); }).join(', ');
+  }
   function row(dl, k, v) { var dt = document.createElement('dt'); dt.textContent = k; var dd = document.createElement('dd'); dd.textContent = v; dl.appendChild(dt); dl.appendChild(dd); }
 
   // ---- device ----
@@ -86,7 +100,7 @@
 
   var cachedBefore = await X.isModelCached(cat.model);
   var bytes = null;
-  try { bytes = await X.modelDownloadBytes(cat.model); } catch (e) { $('load-status').textContent = 'Could not reach the model host: ' + e.message; }
+  try { bytes = await X.modelDownloadBytes(cat.model); } catch (e) { $('load-status').textContent = 'Could not reach the model host.'; }
   $('load').textContent = cachedBefore ? 'Start model (already downloaded)' : 'Download model · ' + (bytes ? X.toMB(bytes) + ' MB' : '? MB') + ' · one-time download';
   $('load').disabled = !dev.ok && !confirm('The widget would NOT offer the AI on this device (' + dev.reason + '). Try loading anyway?');
 
@@ -118,69 +132,81 @@
     return total;
   }
 
+  async function aiRun(fn) {
+    var t0 = performance.now(), r, crash = null;
+    try { r = await fn(); } catch (e) { crash = e.message; r = null; }
+    return { r: r, crash: crash, ms: Math.round(performance.now() - t0) };
+  }
+
   $('run').onclick = async function () {
     $('run').disabled = true;
     $('rows').textContent = '';
     report.questions = [];
-    var firstAnswerMs = null, times = [], invalid = 0, called = 0, aiHits = 0, rulesHits = 0, onTopic = 0, badLinks = 0;
+    var pass = { kwBefore: 0, kwAfter: 0, aiBefore: 0, aiAfter: 0 }, invalid = 0, calls = 0, firstMs = null, times = [];
     for (var i = 0; i < questions.length; i++) {
-      var q = questions[i], rec = { id: q.id, text: q.text };
-      if (!q.text.trim()) { rec.result = 'nothing sent (empty)'; rec.ok = true; report.questions.push(rec); addRow(i, q, rec); continue; }
-      var rules = core.recommendRules(cat, q.text);
-      var t0 = performance.now(), res;
-      try { res = await core.recommendAI(cat, client, q.text, { timeoutMs: 60000 }); }
-      catch (e) { res = core.recommendRules(cat, q.text); res.crash = e.message; }
-      var ms = Math.round(performance.now() - t0);
-      var calledModel = res.raw !== undefined || res.crash;
-      if (calledModel) { called++; times.push(ms); if (firstAnswerMs === null) firstAnswerMs = ms; }
-      if (res.modelInvalid || res.crash) invalid++;
-      var links = (res.ids || []).map(function (id) { return cat.byId[id] && cat.byId[id].url; });
-      links.forEach(function (u) { if (!realUrls.has(u)) badLinks++; });
-      var hit = q.anyOf ? (res.ids || []).some(function (id) { return q.anyOf.indexOf(id) >= 0; }) : null;
-      var rHit = q.anyOf ? rules.ids.some(function (id) { return q.anyOf.indexOf(id) >= 0; }) : null;
-      if (q.anyOf) { onTopic++; if (hit) aiHits++; if (rHit) rulesHits++; }
-      var ok = links.every(function (u) { return realUrls.has(u); }) && (q.expect === 'none' ? res.kind === 'none' : (res.kind === 'ask' || hit));
-      Object.assign(rec, { kind: res.kind, source: res.source, raw: res.raw || null, crash: res.crash || null, ids: res.ids || [], question: res.question || null, ms: ms, calledModel: !!calledModel, hitExpected: hit, rulesIds: rules.ids, rulesHitExpected: rHit, ok: ok });
+      var q = questions[i];
+      $('progress').textContent = 'Question ' + (i + 1) + ' of ' + questions.length + '…';
+      var kwB = normaliseV1(V1.recommendRules(catV1, q.text));
+      var kwA = core.recommendRules(cat, q.text);
+      var after = await aiRun(function () { return core.recommendAI(cat, client, q.text, { timeoutMs: 60000 }); });
+      var aiA = after.r || core.recommendRules(cat, q.text);
+      var before = await aiRun(function () { return V1.recommendAI(catV1, client, q.text, { timeoutMs: 60000 }); });
+      var aiB = before.r ? normaliseV1(before.r) : normaliseV1(V1.recommendRules(catV1, q.text));
+      var reachedModel = aiA.raw !== undefined || after.crash;
+      if (reachedModel) { calls++; times.push(after.ms); if (firstMs === null) firstMs = after.ms; }
+      if (after.crash || aiA.modelInvalid) invalid++;
+      var c = { kwBefore: check(q, kwB, cat), kwAfter: check(q, kwA, cat), aiBefore: check(q, aiB, cat), aiAfter: check(q, aiA, cat) };
+      Object.keys(c).forEach(function (k) { if (c[k].ok) pass[k]++; });
+      var rec = {
+        id: q.id, text: q.text,
+        keyword: { before: { ok: c.kwBefore.ok, fails: c.kwBefore.fails }, after: { ok: c.kwAfter.ok, fails: c.kwAfter.fails, shows: shows(kwA) } },
+        ai: {
+          before: { ok: c.aiBefore.ok, fails: c.aiBefore.fails, raw: aiB.raw || null, crash: before.crash },
+          after: { ok: c.aiAfter.ok, fails: c.aiAfter.fails, shows: shows(aiA), source: aiA.source, raw: aiA.raw || null, crash: after.crash, ms: after.ms, reachedModel: !!reachedModel },
+        },
+      };
       report.questions.push(rec);
       addRow(i, q, rec);
     }
     times.sort(function (a, b) { return a - b; });
     var stats = await client.stats();
     $('stats').textContent = stats || '–';
+    var n = questions.length;
     report.summary = {
-      renderedLinksNotInCatalogue: badLinks,
-      modelCalls: called,
+      questions: n,
+      passing: { keywordBefore: pass.kwBefore, keywordAfter: pass.kwAfter, aiBefore: pass.aiBefore, aiAfter: pass.aiAfter },
+      modelCalls: calls,
       modelInvalidOrCrashed: invalid,
-      timeToFirstAnswerMs: firstAnswerMs,
+      timeToFirstAnswerMs: firstMs,
       medianAnswerMs: times.length ? times[Math.floor(times.length / 2)] : null,
-      expectedGameHit: { ai: aiHits + '/' + onTopic, rules: rulesHits + '/' + onTopic },
       jsHeapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 'not reported (Chrome only)',
       gpuMemoryEstimateMB: Math.round(cat.model.vram_mb),
       engineStats: stats,
     };
-    var pass = badLinks === 0 && invalid === 0 && aiHits >= rulesHits;
-    report.summary.verdict = pass ? 'PASS' : 'FAIL';
+    var verdict = invalid === 0 && pass.aiAfter >= pass.kwAfter;
+    report.summary.verdict = verdict ? 'PASS' : 'FAIL';
     var s = $('summary'); s.textContent = '';
-    row(s, 'Verdict', report.summary.verdict + '  (0 bad links, 0 invalid model replies, AI hits ≥ keyword hits)');
-    row(s, 'Rendered links not in catalogue', String(badLinks));
-    row(s, 'Model replies invalid or crashed', invalid + ' of ' + called);
-    row(s, 'Expected game in picks', 'AI ' + aiHits + '/' + onTopic + ' · keyword ' + rulesHits + '/' + onTopic);
-    row(s, 'Time to first answer', firstAnswerMs != null ? (firstAnswerMs / 1000).toFixed(2) + ' s' : '–');
+    row(s, 'Verdict', report.summary.verdict + '  (no invalid model replies, and AI after passes at least as many questions as keyword after)');
+    row(s, 'Passing (of ' + n + ')', 'Keyword: before ' + pass.kwBefore + ', after ' + pass.kwAfter + ' · AI: before ' + pass.aiBefore + ', after ' + pass.aiAfter);
+    row(s, 'Model replies invalid or crashed (after)', invalid + ' of ' + calls);
+    row(s, 'Time to first answer', firstMs != null ? (firstMs / 1000).toFixed(2) + ' s' : '–');
     row(s, 'Median answer time', report.summary.medianAnswerMs != null ? (report.summary.medianAnswerMs / 1000).toFixed(2) + ' s' : '–');
     row(s, 'Model load', report.load.ms ? (report.load.ms / 1000).toFixed(1) + ' s' + (report.load.fromCache ? ' (from cache)' : ' (download + start)') : '–');
     row(s, 'Download size (measured in cache)', report.load.downloadMBMeasured ? report.load.downloadMBMeasured + ' MB (button said ' + report.load.downloadMBShownOnButton + ' MB)' : '–');
     row(s, 'Memory', 'Page JS heap: ' + report.summary.jsHeapMB + ' MB. GPU: WebLLM estimate ' + report.summary.gpuMemoryEstimateMB + ' MB. For the real figure open Chrome menu › More tools › Task manager and read the "GPU Process" memory row.');
+    $('progress').textContent = 'Done.';
     $('copy').disabled = false;
     $('run').disabled = false;
   };
 
+  function mark(c) { return c.ok ? 'PASS' : 'FAIL: ' + c.fails.join('; '); }
   function addRow(i, q, rec) {
     var tr = document.createElement('tr');
-    var cells = [String(i + 1), q.text || '(empty)', rec.raw || rec.crash || '', (rec.ids || []).join('\n') || rec.question || rec.result || rec.kind, rec.source || '', rec.ms != null ? String(rec.ms) : '', rec.ok ? 'PASS' : 'FAIL'];
+    var cells = [String(i + 1), q.text, mark(rec.keyword.before), mark(rec.keyword.after), mark(rec.ai.before), mark(rec.ai.after), rec.ai.after.shows + (rec.ai.after.source === 'rules' ? ' (keyword)' : ''), rec.ai.after.raw || rec.ai.after.crash || '', String(rec.ai.after.ms)];
     cells.forEach(function (c, j) {
       var td = document.createElement('td');
-      if (j === 2) { var code = document.createElement('code'); code.textContent = c; td.appendChild(code); } else td.textContent = c;
-      if (j === 6) td.className = rec.ok ? 'pass' : 'fail';
+      if (j === 7) { var code = document.createElement('code'); code.textContent = c; td.appendChild(code); } else td.textContent = c;
+      if (j >= 2 && j <= 5) td.className = /^PASS/.test(c) ? 'pass' : 'fail';
       tr.appendChild(td);
     });
     $('rows').appendChild(tr);
