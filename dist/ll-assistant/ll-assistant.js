@@ -35,7 +35,8 @@
       close: 'Close',
       privacy: 'Runs in your browser. What you type is not sent to us.',
       modeAI: 'AI suggestions can be wrong.',
-      modeRules: 'Matches by keyword.',
+      more: 'more',
+      less: 'less',
       offerTitle: 'Want smarter picks?',
       offerBody: 'Turn on a small AI that runs inside this browser.',
       offerBtn: 'Download AI · {mb} MB · one-time download',
@@ -48,7 +49,10 @@
       aiOff: 'Showing keyword matches.',
       intro: 'Tell me your student’s age or level, the skill and the lesson length.',
       examples: ['Age 7, beginner, phonics, 30 min', 'Adult, B2, IELTS speaking, 60 min', 'Group of 6 kids aged 9, warm-up'],
-      placeholder: 'e.g. Age 8, beginner, phonics, 30 min',
+      placeholder: 'Age, level, skill',
+      inputLabel: 'Describe your student',
+      planNote: 'Opens the plan details',
+      noMore: 'No more games fit that. Try another skill:',
       send: 'Find games',
       thinking: 'Thinking…',
       picksIntro: 'Try these:',
@@ -77,7 +81,8 @@
       close: '關閉',
       privacy: '喺你部機運行。你打嘅內容唔會傳送畀我哋。',
       modeAI: 'AI 建議可能有錯。',
-      modeRules: '按關鍵字配對。',
+      more: '更多',
+      less: '收起',
       offerTitle: '想揀得更準？',
       offerBody: '開一個喺呢個瀏覽器入面運行嘅小型 AI。',
       offerBtn: '下載 AI · {mb} MB · 只需下載一次',
@@ -90,7 +95,10 @@
       aiOff: '而家用關鍵字配對。',
       intro: '話我知學生嘅年齡或程度、技能同堂長。',
       examples: ['7 歲、初學、拼讀、30 分鐘', '成人、B2、IELTS 口試、60 分鐘', '6 個 9 歲小朋友、熱身'],
-      placeholder: '例如：8 歲、初學、拼讀、30 分鐘',
+      placeholder: '年齡、程度、技能',
+      inputLabel: '描述你嘅學生',
+      planNote: '會開啟方案詳情',
+      noMore: '冇其他合適嘅遊戲喇。可以試吓其他技能：',
       send: '搵遊戲',
       thinking: '諗緊…',
       picksIntro: '可以試吓：',
@@ -144,7 +152,7 @@
   // Words that may surround an age, grade or level without naming a skill.
   // A message made only of these plus an age asks for the skill (A5).
   var TEACH_EN = toSet('student students pupil pupils learner learners kid kids child children son daughter boy boys girl girls class classes group lesson lessons beginner beginners total complete absolute level levels hong kong hk local international school primary secondary sec form year grade age aged old years yo teach teaching tutor tutoring private one new adult adults teen teens teenage teenager teenagers preschool kindergarten nursery online english esl elementary intermediate advanced upper pre zero mine idea ideas suggestion suggestions suggest recommend recommendation recommendations something anything help practice practise extra fun play stuff she he her his him years-old got use using tomorrow today tonight week weekend weekday monday tuesday wednesday thursday friday saturday sunday session sessions thanks thank hi hello lol'.split(' ').map(norm));
-  var TEACH_ZH = ['國際學校', '請問', '適合', '聽日', '今日', '明日', '明天', '今天', '星期', '禮拜', '今個', '下個', '週末', '周末', '今年', '小朋友', '零基礎', '青少年', '幼稚園', '一對一', '學生', '細路', '兒子', '女兒', '初學', '初級', '程度', '香港', '本地', '學校', '成人', '大人', '中學', '小學', '新手', '入門', '啱啱', '開始', '補習', '英文', '上堂', '課堂', '我哋', '佢哋', '遊戲', '建議', '推介', '介紹', '有冇', '有無', '練習', '而家', '依家', '讀緊', '讀書', '返學', '上學', '好玩', '可以', '邊啲', '什麼', '甚麼', '我', '佢', '嘅', '個', '有', '一', '班', '堂', '仔', '女', '學', '教', '的', '是', '係', '讀', '生', '位', '名', '同', '和', '咗', '緊', '剛', '歲', '咩', '乜', '啲', '俾', '畀', '玩', '想', '嗎', '呢', '吖', '啊', '呀', '喎', '嘛', '半', '新', '好', '用', '喺', '在'];
+  var TEACH_ZH = ['國際學校', '請問', '適合', '聽日', '今日', '明日', '明天', '今天', '星期', '禮拜', '今個', '下個', '週末', '周末', '今年', '小朋友', '零基礎', '青少年', '幼稚園', '一對一', '學生', '細路', '兒子', '女兒', '初學', '初級', '程度', '香港', '本地', '學校', '成人', '大人', '中學', '小學', '新手', '入門', '啱啱', '開始', '補習', '英文', '上堂', '課堂', '我哋', '佢哋', '遊戲', '建議', '推介', '介紹', '有冇', '有無', '練習', '而家', '依家', '讀緊', '讀書', '返學', '上學', '好玩', '可以', '邊啲', '什麼', '甚麼', '我', '佢', '嘅', '個', '有', '一', '班', '堂', '仔', '女', '學', '教', '的', '是', '係', '讀', '生', '位', '名', '同', '和', '咗', '緊', '剛', '歲', '咩', '乜', '啲', '俾', '畀', '玩', '想', '嗎', '呢', '吖', '啊', '呀', '喎', '嘛', '半', '新', '好', '用', '喺', '在', '練', '推薦', '冇', '啦', '喇', '吓'];
 
   var ZH_SAME = [['口說', '口語']];
 
@@ -176,6 +184,9 @@
   // as a topic match when deciding whether a free game goes first.
   var AUDIENCE_EN = toSet('adult adults grown-up kid kids child children teen teens teenager teenagers beginner beginners young learner learners student students'.split(' ').map(norm));
   var AUDIENCE_ZH = ['成人', '大人', '小朋友', '細路', '兒童', '青少年', '初學', '學生'];
+  // School years in a game's keywords (P4, 小四, 中一, 中學) are already used by
+  // the age filter. As keywords they add only a little and are never a topic.
+  var GRADE_KW = /^(?:[kpfs]\.?[1-6]|中[一二三四五六]|小[一二三四五六]|初小|高小|初中|高中|中學生?|小學生?|primary|secondary|form)$/i;
 
   function detectLang(text) { return CJK.test(text || '') ? 'zh' : 'en'; }
 
@@ -372,7 +383,7 @@
       if (/(group|pair|team|class|course|frame|art|home)\s*$/.test(before) || /^\s*(on|out|sheet|book)\b/.test(after)) continue;
       return true;
     }
-    return /\bworkplace\b|\boffice\b|上班|職場|工作(?!紙)/.test(low);
+    return /\bworkplace\b|\boffice\b|上班|返工|職場|工作(?!紙)/.test(low);
   }
 
   function parseQuery(text) {
@@ -383,7 +394,12 @@
     var work = applyRules(low, MINUTE_RULES, function (rule, v) { if (minutes == null) minutes = v; });
     // Keywords are matched without the lesson length or phrases like "first
     // time", so "30分鐘" or "first time" never count as a topic.
-    var scoreText = work.replace(/\b(first|last|next|this|every|each|full|part|free|spare|some|any|long|short|good|great|fun|hard|tough|difficult|nice)[\s-]+time\b/g, ' ');
+    var scoreText = work.replace(/\b(first|last|next|this|every|each|full|part|free|spare|some|any|long|short|good|great|fun|hard|tough|difficult|nice)[\s-]+time\b/g, ' ')
+      // "group work", "work on", "worksheet", 工作紙: a way of working, not the topic "work"
+      .replace(/\b(group|pair|team|class|home|art)[\s-]*work(?:s|ing)?\b/g, '$1 ')
+      .replace(/\bwork(?:s|ing)?(?=\s+(?:on|out|in\s+(?:groups?|pairs?|teams?)|sheets?|books?)\b)/g, ' ')
+      .replace(/\bwork[\s-]?(?:sheets?|books?)\b/g, ' ')
+      .replace(/工作紙|功課/g, ' ');
     var dse = null;
     work = applyRules(work, AGE_RULES, function (rule, r) {
       if (r[0] > r[1]) r = [r[1], r[0]];
@@ -451,6 +467,8 @@
       minutes: minutes,
       adultSignal: adultSignal,
       ageOnly: rest.length === 0 && zhRest.length === 0,
+      rest: rest,
+      zhWork: (work.match(CJK_ALL) || []).join(''),
       lang: detectLang(raw),
     };
   }
@@ -495,12 +513,20 @@
   // be checked for a real match, not just a matching skill (decision 3A).
   function scoreGame(g, q) {
     var ix = indexGame(g), kw = 0, topic = 0, hits = 0, i;
-    for (i = 0; i < ix.kwEn.length && hits < 5; i++) if (q.tokSet[ix.kwEn[i]]) { kw += 3; hits++; if (!AUDIENCE_EN[ix.kwEn[i]]) topic += 3; }
+    for (i = 0; i < ix.kwEn.length && hits < 5; i++) {
+      if (!q.tokSet[ix.kwEn[i]]) continue;
+      hits++;
+      if (GRADE_KW.test(ix.kwEn[i])) { kw += 1; continue; }
+      kw += 3;
+      if (!AUDIENCE_EN[ix.kwEn[i]]) topic += 3;
+    }
     for (i = 0; i < ix.kwZh.length && hits < 5; i++) {
       var term = ix.kwZh[i];
       // A keyword such as 自然拼讀 also matches the skill word 拼讀 in the query.
       if (q.text.indexOf(term) >= 0 || (q.zhSkillWords || []).some(function (w) { return term.indexOf(w) >= 0; })) {
-        kw += 3; hits++;
+        hits++;
+        if (GRADE_KW.test(term)) { kw += 1; continue; }
+        kw += 3;
         if (AUDIENCE_ZH.indexOf(term) < 0) topic += 3;
       }
     }
@@ -527,13 +553,14 @@
     return minutes < 30 ? { min: 1, max: 2 } : { min: 2, max: 3 };
   }
 
-  function buildContext(cat, q) {
-    var eligible = cat.games.filter(function (g) { return passes(g, q); });
+  function buildContext(cat, q, exclude) {
+    var eligible = cat.games.filter(function (g) { return passes(g, q) && !(exclude && exclude.indexOf(g.id) >= 0); });
     var eligibleSet = toSet(eligible.map(function (g) { return g.id; }));
     var scored = eligible
-      .map(function (g, i) { var r = scoreGame(g, q); return { g: g, s: r.s, kw: r.kw, i: i }; })
+      .map(function (g, i) { var r = scoreGame(g, q); return { g: g, s: r.s, kw: r.kw, i: i, older: q.adultSignal && OLDER_TEXT.test(g.kw + ' ' + g.desc_en) ? 1 : 0 }; })
       .filter(function (x) { return x.s > 0; })
-      .sort(function (a, b) { return b.s - a.s || a.i - b.i; });
+      // Equal scores: for a teen or adult query, a game written for older learners first.
+      .sort(function (a, b) { return b.s - a.s || b.older - a.older || a.i - b.i; });
     var top = scored.length ? scored[0].s : 0;
     var rel = scored.filter(function (x) { return x.s >= Math.max(MIN_SCORE, top * 0.5); });
     var scoreOf = Object.create(null);
@@ -554,8 +581,12 @@
   // hard filter -> top up to the minimum -> kid-themed down -> free first -> trim.
   var OLDER_TEXT = /\badults?\b|成人|\bteen|secondary|中學|\bielts\b|雅思/i;
 
-  function finalize(ctx, startIds) {
+  function finalize(ctx, startIds, lead) {
     var byId = ctx.cat.byId, q = ctx.q, N = ctx.N, items = [];
+    // AI mode: the keyword answer's lead (its first card, and its best keyword
+    // match when a free game went in front) stays ahead of the model's picks,
+    // so the model can fill the other places but never drop or demote it.
+    if (lead && lead.length) startIds = lead.concat(startIds.filter(function (id) { return lead.indexOf(id) < 0; }));
     function has(id) { return items.some(function (it) { return itemIds(it).indexOf(id) >= 0; }); }
     function itemFor(id) {
       var g = byId[id];
@@ -586,23 +617,25 @@
     // Kid-themed games below all others for teen and adult queries, never
     // first, never hidden (A2). Older kid-themed games come first (2A).
     var kidNote = false;
+    function noOlder(it) {
+      var skill = byId[itemIds(it)[0]].skill;
+      return !ctx.eligible.some(function (g) { return g.skill === skill && !g.kid; });
+    }
     function arrange() {
       if (!q.adultSignal) return;
       var non = items.filter(function (it) { return !isKid(it); });
+      // Kid-themed cards of a skill with nothing for older learners come first
+      // (the note names that skill), then older ones first (2A).
       var kids = items.filter(isKid)
         .map(function (it, i) { return { it: it, i: i }; })
-        .sort(function (a, b) { return maxAgeMin(b.it) - maxAgeMin(a.it) || a.i - b.i; })
+        .sort(function (a, b) { return noOlder(b.it) - noOlder(a.it) || maxAgeMin(b.it) - maxAgeMin(a.it) || a.i - b.i; })
         .map(function (x) { x.it.kid = true; return x.it; });
       // The note explains kid-themed games of a skill that has nothing for
       // older learners, even when a game of another skill is shown first.
-      if (kids.length) {
-        var noteSkill = byId[itemIds(kids[0])[0]].skill;
-        kidNote = !ctx.eligible.some(function (g) { return g.skill === noteSkill && !g.kid; });
-      }
+      if (kids.length) kidNote = noOlder(kids[0]);
       if (!non.length && kids.length) {
-        // No game for older learners in this skill: the best other game goes
-        // first, then a note, then the kid-themed games.
-        kidNote = true;
+        // Every card is kid-themed: the best game that is not goes first,
+        // then the note (when it applies), then the kid-themed games.
         var best = bestNonKid();
         if (best) { var bi = itemFor(best.id); if (bi) non.push(bi); }
       }
@@ -619,7 +652,7 @@
       return older.sort(byFree)[0] || pool.slice().sort(byFree)[0] || null;
     }
 
-    if (q.adultSignal) skillPool().forEach(function (id) { if (!byId[id].kid) push(id); });
+    if (q.adultSignal && !ctx.onlyRel) skillPool().forEach(function (id) { if (!byId[id].kid) push(id); });
     arrange();
     items = items.slice(0, N.max);
 
@@ -661,7 +694,14 @@
   }
 
   // The keyword recommender. Always available, and the fallback for the AI.
-  function recommendRules(cat, text) {
+  // opts.exclude: game ids already shown (a follow-up). opts.followUp: never
+  // end in "could not match"; when nothing is left, say so and offer skills.
+  function recommendRules(cat, text, opts) {
+    opts = opts || {};
+    if (opts.followUp) return followUp(cat, text, opts.exclude || []);
+    // A follow-up with nothing before it ("something else" as a first message):
+    // never "could not match"; ask which skill.
+    if (isFollowUp(text)) return followUp(cat, '', []);
     var q = parseQuery(text);
 
     // Reading (A6): under 8 means phonics; from 8 there is no reading game.
@@ -671,11 +711,20 @@
       else return result(q, { kind: 'ask', askType: 'reading', choices: ['vocab', 'grammar', 'listening'] });
     }
 
-    var ctx = buildContext(cat, q);
+    var ctx = buildContext(cat, q, opts.exclude);
 
     // An age, school year or level with only teaching words around it: ask for the skill (A5).
     if (!q.skills.length && (q.hasAge || q.hasLevel) && q.ageOnly) return withCtx(result(q, { kind: 'ask', askType: 'skill', choices: SIX.slice() }), ctx);
-    if (!q.skills.length && ctx.top < MIN_SCORE) return withCtx(result(q, { kind: 'none' }), ctx);
+    // One keyword match is enough when everything else in the message is
+    // teaching or filler words ("English for work", 自我介紹). A message with
+    // any other word ("I work at a bank") still needs a stronger match.
+    if (!teachingRequest(q)) return withCtx(result(q, { kind: 'none' }), ctx);
+    var lowBar = !q.skills.length && ctx.top < MIN_SCORE && onlyKeywords(ctx, q);
+    if (!q.skills.length && ctx.top < MIN_SCORE && !lowBar) return withCtx(result(q, { kind: 'none' }), ctx);
+    if (lowBar) {
+      ctx.rel = ctx.scored.filter(function (x) { return x.kw > 0 && x.s >= Math.max(3, ctx.top * 0.5); });
+      ctx.onlyRel = true;
+    }
 
     // The skill asked for has no game for this age or level.
     if (q.skills.length && !ctx.eligible.some(function (g) { return q.skills.indexOf(g.skill) >= 0; })) {
@@ -696,7 +745,90 @@
       .map(function (x) { return x.g.id; });
     var fin = finalize(ctx, start);
     if (!fin.items.length) return withCtx(result(q, { kind: 'none' }), ctx);
+    ctx.lead = keywordLead(ctx, fin.items);
     return withCtx(result(q, { kind: 'picks', items: fin.items, kidNote: fin.kidNote, narrow: !q.hasAge && !q.hasLevel }), ctx);
+  }
+
+  // "English for work", 自我介紹: a message that is one topic plus teaching
+  // words. The topic word must be a game keyword that is not itself a teaching
+  // word, every other word must be a teaching or filler word, and the message
+  // must either mention English or teaching, or be nothing but the topic.
+  var TEACHING_CONTEXT = /\b(?:english|lessons?|class(?:es)?|teach(?:ing)?|tutor(?:ing)?|games?|activit(?:y|ies)|practi[cs]e|warm-?ups?)\b|英文|英語|教|課|堂|遊戲|練|補習|熱身/i;
+  function onlyKeywords(ctx, q) {
+    if (!ctx.scored.some(function (x) { return x.kw > 0; })) return false;
+    var en = Object.create(null), zh = [];
+    ctx.eligible.forEach(function (g) {
+      var ix = indexGame(g);
+      ix.kwEn.concat(ix.titleToks).forEach(function (w) { en[w] = true; });
+      zh = zh.concat(ix.kwZh);
+    });
+    if (!q.rest.every(function (t) { return en[t]; })) return false;
+    // Keywords first (自我介紹 contains the teaching word 介紹), then teaching words.
+    var left = q.zhWork, zhTopic = false;
+    zh.sort(function (a, b) { return b.length - a.length; }).forEach(function (t) {
+      if (left.indexOf(t) < 0) return;
+      if (TEACH_ZH.indexOf(t) < 0) zhTopic = true;
+      left = left.split(t).join(' ');
+    });
+    if (!q.rest.length && !zhTopic) return false;
+    TEACH_ZH.forEach(function (w) { left = left.split(w).join(' '); });
+    if (left.replace(/[一二兩三四五六七八九十年]/g, ' ').match(CJK_ALL)) return false;
+    return TEACHING_CONTEXT.test(q.low);
+  }
+
+  // D1: "any other recommendations", "something else", 還有其他推薦嗎, 仲有冇, 悶.
+  // Only follow-up words, teaching words and filler: no new age, level, skill or topic.
+  var FOLLOW_EN = toSet('more another other others else different next again alternative alternatives option options bored boring show give'.split(' ').map(norm));
+  var FOLLOW_EN_RE = /\b(?:more|another|others?|else|different|next|again|alternatives?|options|bored|boring)\b/i;
+  var FOLLOW_ZH = ['還有', '仲有', '其他', '其它', '另外', '別的', '第二啲', '第二隻', '多啲', '多一啲', '唔啱', '換', '再', '悶'];
+  function isFollowUp(text) {
+    var q = parseQuery(text);
+    if (q.hasAge || q.hasLevel || q.skills.length || q.reading || q.minutes != null) return false;
+    var zhHit = FOLLOW_ZH.some(function (w) { return q.low.indexOf(w) >= 0; });
+    if (!FOLLOW_EN_RE.test(q.low) && !zhHit) return false;
+    if (q.rest.some(function (t) { return !FOLLOW_EN[t]; })) return false;
+    var left = q.zhWork;
+    FOLLOW_ZH.concat(TEACH_ZH).forEach(function (w) { left = left.split(w).join(' '); });
+    return !left.match(CJK_ALL);
+  }
+
+  // A message with no sign of a lesson (no skill, age, level, lesson length,
+  // learner word or teaching word) is off-topic, whatever keywords it hits:
+  // "Book a meeting room in the office" stays the off-topic reply.
+  function teachingRequest(q) {
+    return !!(q.skills.length || q.hasAge || q.hasLevel || q.minutes != null || q.reading ||
+      TEACHING_CONTEXT.test(q.low) || q.tokens.some(function (t) { return AUDIENCE_EN[norm(t)]; }) ||
+      AUDIENCE_ZH.some(function (w) { return q.low.indexOf(w) >= 0; }));
+  }
+
+  // The cards AI mode must keep: the keyword answer's first card, and its
+  // best-scoring card if a free game was put in front of it. Only games that
+  // matched the question's keywords count.
+  function keywordLead(ctx, items) {
+    function sc(it) { return Math.max.apply(null, itemIds(it).map(function (id) { var x = ctx.scoreOf[id]; return x && x.kw > 0 ? x.s : -1; })); }
+    var lead = [];
+    if (items.length && sc(items[0]) >= 0) lead.push(itemIds(items[0])[0]);
+    var best = items.filter(function (it) { return sc(it) >= 0; })
+      .map(function (it, i) { return { it: it, s: sc(it), i: i }; })
+      .sort(function (a, b) { return b.s - a.s || a.i - b.i; })[0];
+    if (best && lead.indexOf(itemIds(best.it)[0]) < 0) lead.push(itemIds(best.it)[0]);
+    return lead;
+  }
+
+  // The next best games for the previous question, without the ones shown.
+  function followUp(cat, prevText, exclude) {
+    if (!prevText) {
+      var q0 = parseQuery('');
+      return result(q0, { kind: 'ask', askType: 'skill', choices: SIX.slice() });
+    }
+    var res = recommendRules(cat, prevText, { exclude: exclude });
+    if (res.kind === 'picks') { res.followUp = true; return res; }
+    var q = parseQuery(prevText);
+    var ctx = buildContext(cat, q, exclude);
+    return withCtx(result(q, {
+      kind: 'ask', askType: 'skill', noMore: true,
+      choices: SIX.filter(function (s) { return ctx.eligible.some(function (g) { return g.skill === s; }); }),
+    }), ctx);
   }
 
   function withCtx(res, ctx) { Object.defineProperty(res, 'ctx', { value: ctx }); return res; }
@@ -948,9 +1080,11 @@
   // reach the model. Any model problem falls back to the keyword result.
   function recommendAI(cat, client, text, opts) {
     opts = opts || {};
-    var base = recommendRules(cat, text);
+    var base = recommendRules(cat, text, { exclude: opts.exclude, followUp: opts.followUp });
     if (base.kind !== 'picks') return Promise.resolve(base);
     var ctx = base.ctx, q = base.q;
+    // D2: never fewer cards than the keyword answer ("Year 5 口說" gives three).
+    ctx.N = { min: Math.max(ctx.N.min, Math.min(base.items.length, ctx.N.max)), max: ctx.N.max };
     var cands = ctx.scored.slice(0, 12).map(function (x) { return x.g; });
     var ids = cands.map(function (g) { return g.id; });
     var allowAsk = !q.hasAge && !q.hasLevel && !opts.noAsk;
@@ -961,8 +1095,8 @@
       var meta = { raw: reply.text, ms: reply.ms != null ? reply.ms : Date.now() - t0, candidates: ids };
       var out;
       if (parsed.kind === 'picks') {
-        var fin = finalize(ctx, parsed.ids);
-        out = result(q, { kind: 'picks', source: 'ai', items: fin.items, kidNote: fin.kidNote, modelIds: parsed.ids, narrow: false });
+        var fin = finalize(ctx, parsed.ids, ctx.lead);
+        out = result(q, { kind: 'picks', source: 'ai', items: fin.items, kidNote: fin.kidNote, modelIds: parsed.ids, narrow: false, followUp: !!opts.followUp });
       } else if (parsed.kind === 'ask') {
         out = result(q, { kind: 'ask', askType: 'age', source: 'ai' });
       } else {
@@ -977,7 +1111,7 @@
   var core = {
     T: T, LEVELS: LEVELS, SIX: SIX, detectLang: detectLang, messageLang: messageLang, parseQuery: parseQuery,
     filterAge: filterAge, passes: passes, scoreGame: scoreGame, buildContext: buildContext, finalize: finalize,
-    recommendRules: recommendRules, recommendAI: recommendAI, buildMessages: buildMessages,
+    recommendRules: recommendRules, recommendAI: recommendAI, buildMessages: buildMessages, isFollowUp: isFollowUp,
     responseSchema: responseSchema, parseModelReply: parseModelReply, parseChoices: parseChoices,
     prepareCatalogue: prepareCatalogue, lengthRange: lengthRange, familyOf: familyOf, SYSTEM_PROMPT: SYSTEM_PROMPT,
   };
@@ -1125,7 +1259,7 @@
     } else show();
 
     // The launcher always uses the page's language, never the conversation's.
-    S.launcher = el('button', { type: 'button', 'class': 'll-launcher ll-cta', 'aria-expanded': 'false', 'aria-controls': 'll-panel', on: { click: toggle } }, [
+    S.launcher = el('button', { type: 'button', 'class': 'll-launcher ll-btn', 'aria-expanded': 'false', 'aria-controls': 'll-panel', on: { click: toggle } }, [
       el('span', { 'class': 'll-launcher-icon', 'aria-hidden': 'true', text: '✦' }),
       el('span', { 'class': 'll-launcher-text', text: t(S.defaultLang).launcher }),
     ]);
@@ -1167,6 +1301,7 @@
     if (!S.panel) buildPanel();
     else if (S.cleared) { S.cleared = false; applyLabels(); renderLog(); }
     S.panel.hidden = false;
+    fitDescs(S.log);
     setTimeout(function () { S.input && S.input.focus(); }, 30);
     if (!S.cat && !S.catLoading) loadCatalogue();
   }
@@ -1197,16 +1332,16 @@
     S.closeBtn = el('button', { type: 'button', 'class': 'll-close', on: { click: close } }, ['×']);
     S.privacyText = el('span');
     S.privacy = el('p', { 'class': 'll-privacy' }, [lockIcon(), S.privacyText]);
-    S.modeLine = el('p', { 'class': 'll-modeline' });
     S.offer = el('div', { 'class': 'll-offer', hidden: true, 'aria-live': 'polite' });
     S.log = el('div', { 'class': 'll-log', 'aria-live': 'polite' });
-    S.input = el('textarea', { 'class': 'll-input', rows: '2', maxlength: '600', 'aria-labelledby': 'll-title' });
+    S.inputLabel = el('label', { 'class': 'll-sr', 'for': 'll-input' });
+    S.input = el('textarea', { 'class': 'll-input', id: 'll-input', rows: '1', maxlength: '600' });
     S.sendBtn = el('button', { type: 'button', 'class': 'll-send ll-cta', disabled: true, on: { click: function () { submit(); } } });
     // No <form>: analytics tools that count form starts and submits ignore the widget.
-    var composer = el('div', { 'class': 'll-composer' }, [S.input, S.sendBtn]);
+    var composer = el('div', { 'class': 'll-composer' }, [S.inputLabel, S.input, S.sendBtn]);
     S.panel = el('div', { id: 'll-panel', 'class': 'll-panel', role: 'dialog', 'aria-labelledby': 'll-title', hidden: true }, [
       el('div', { 'class': 'll-head' }, [S.titleEl, S.closeBtn]),
-      S.privacy, S.modeLine, S.offer, S.log, composer,
+      S.privacy, S.offer, S.log, composer,
     ]);
     S.root.appendChild(S.panel);
     applyLabels();
@@ -1223,8 +1358,8 @@
     S.titleEl.textContent = L.title;
     S.closeBtn.setAttribute('aria-label', L.close);
     S.privacyText.textContent = L.privacy;
-    S.modeLine.textContent = S.ai === 'ready' ? L.modeAI : L.modeRules;
     S.input.placeholder = L.placeholder;
+    S.inputLabel.textContent = L.inputLabel;
     S.sendBtn.textContent = L.send;
     renderOffer(lang);
   }
@@ -1232,15 +1367,32 @@
   function renderLog() {
     if (!S.log) return;
     S.log.textContent = '';
-    S.introEl = el('div', { 'class': 'll-msg ll-bot ll-intro' });
-    S.log.appendChild(S.introEl);
-    fillIntro();
-    S.turns.forEach(function (turn) { S.log.appendChild(renderTurn(turn)); });
+    S.introEl = S.group = null;
+    if (!S.turns.length) {
+      S.introEl = el('div', { 'class': 'll-msg ll-bot ll-intro' });
+      S.log.appendChild(S.introEl);
+      fillIntro();
+    }
+    S.turns.forEach(appendTurn);
+    fitDescs(S.log);
     S.log.scrollTop = S.log.scrollHeight;
+  }
+
+  // A teacher message and the reply after it form one group (C1).
+  function appendTurn(turn) {
+    if (S.introEl) { S.introEl.remove(); S.introEl = null; }
+    if (turn.who === 'you' || !S.group) {
+      S.group = el('div', { 'class': 'll-turn' });
+      S.log.appendChild(S.group);
+    }
+    var node = renderTurn(turn);
+    S.group.appendChild(node);
+    return node;
   }
 
   function fillIntro() {
     var L = t();
+    if (!S.introEl) return;
     S.introEl.textContent = '';
     S.introEl.appendChild(el('p', { text: L.intro }));
     var chips = el('div', { 'class': 'll-chips' });
@@ -1251,6 +1403,15 @@
   function onInput() {
     if (!S.sendBtn) return;
     S.sendBtn.disabled = !S.input.value.trim() || S.busy;
+    grow();
+  }
+
+  // The text box starts at one line and grows to four (CSS max-height).
+  var FIELD_SIZING = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('field-sizing', 'content');
+  function grow() {
+    if (FIELD_SIZING || !S.input) return;
+    S.input.style.height = '';
+    if (S.input.value) S.input.style.height = S.input.scrollHeight + 'px';
   }
 
   function loadCatalogue() {
@@ -1261,7 +1422,7 @@
         S.cat = prepareCatalogue(data);
         S.catLoading = false;
         onInput();
-        if (S.queued) { var q = S.queued; S.queued = null; answer(q.text, q.noAsk); }
+        if (S.queued) { var q = S.queued; S.queued = null; answer(q.text, q.noAsk, q.follow); }
         startAICheck();
       })
       .catch(function () {
@@ -1270,7 +1431,7 @@
         if (!S.turns.some(function (tu) { return tu.res && tu.res.kind === 'loadFail'; })) {
           var turn = { who: 'bot', res: { kind: 'loadFail', items: [], ids: [] } };
           S.turns.push(turn);
-          if (!hiddenLog()) S.log.appendChild(renderTurn(turn));
+          if (!hiddenLog()) appendTurn(turn);
         }
       });
   }
@@ -1325,7 +1486,7 @@
       box.className = 'll-offer';
       box.appendChild(el('p', { 'class': 'll-offer-title', text: L.offerTitle }));
       box.appendChild(el('p', { text: L.offerBody }));
-      box.appendChild(el('button', { type: 'button', 'class': 'll-cta ll-cta-block', text: fmt(L.offerBtn, { mb: mb }), on: { click: function () { startModel(false); } } }));
+      box.appendChild(el('button', { type: 'button', 'class': 'll-btn ll-btn-block', text: fmt(L.offerBtn, { mb: mb }), on: { click: function () { startModel(false); } } }));
       box.appendChild(el('p', { 'class': 'll-small', text: L.offerNote }));
       box.appendChild(el('button', { type: 'button', 'class': 'll-link', text: L.offerSkip, on: { click: function () { setAI('declined'); } } }));
     } else if (S.ai === 'declined') {
@@ -1433,8 +1594,14 @@
     var switched = lang && lang !== S.lang;
     if (switched) { S.lang = lang; applyLabels(); }
 
-    var full = text, noAsk = false;
-    if (S.pending) {
+    var full = text, noAsk = false, follow = null;
+    if (isFollowUp(text)) {
+      // D1: the previous question again, without the games already shown.
+      S.pending = null;
+      follow = { followUp: true, exclude: shownIds() };
+      full = S.lastQuery || '';
+      noAsk = true;
+    } else if (S.pending) {
       var p = S.pending, n = /^\s*(\d)\s*[.)]?\s*$/.exec(text);
       S.pending = null;
       var picked = n && p.choices && Number(n[1]) >= 1 && Number(n[1]) <= p.choices.length ? choiceLabel(p, Number(n[1]) - 1) : null;
@@ -1443,25 +1610,29 @@
       var pq = parseQuery(text);
       // After picks shown without an age (soft), only a reply that gives an age or level joins them.
       var isAnswer = picked || (p.type === 'age'
-        ? !pq.skills.length && !pq.reading && (!p.soft || pq.hasLevel || ageReply(p, text))
+        ? !pq.skills.length && !pq.reading && (!p.soft || pq.hasLevel || (ageReply(p, text) && parseQuery(answerPhrase(p, text)).ageOnly))
         : !pq.hasAge && !pq.hasLevel);
       if (isAnswer) {
-        full = p.text + '. ' + (picked || answerPhrase(p, text));
+        full = (p.text ? p.text + '. ' : '') + (picked || answerPhrase(p, text));
         noAsk = true;
       }
     }
 
     S.turns.push({ who: 'you', text: text });
-    if (switched) renderLog(); else if (!hiddenLog()) S.log.appendChild(renderTurn(S.turns[S.turns.length - 1]));
+    if (switched) renderLog(); else if (!hiddenLog()) appendTurn(S.turns[S.turns.length - 1]);
     if (!S.cat) {
-      S.queued = { text: full, noAsk: noAsk };
+      S.queued = { text: full, noAsk: noAsk, follow: follow };
       if (!S.catLoading) retryCatalogue();
       return;
     }
-    answer(full, noAsk);
+    answer(full, noAsk, follow);
   }
 
-  function answer(text, noAsk) {
+  function shownIds() {
+    return S.turns.reduce(function (all, tu) { return tu.res && tu.res.kind === 'picks' ? all.concat(tu.res.ids) : all; }, []);
+  }
+
+  function answer(text, noAsk, follow) {
     S.busy = true; onInput();
     var thinking = null;
     var done = function (res) {
@@ -1469,23 +1640,25 @@
       S.busy = false; onInput();
       var turn = { who: 'bot', res: res, text: text };
       S.turns.push(turn);
+      if (res.kind === 'picks' && !follow) S.lastQuery = text;
       setPending(res, text);
       if (hiddenLog()) return;
-      var box = renderTurn(turn);
-      S.log.appendChild(box);
-      // Show the start of the answer, not its end.
-      S.log.scrollTop = Math.max(0, box.offsetTop - S.log.offsetTop - 48);
+      var box = appendTurn(turn);
+      fitDescs(box);
+      // Show the whole turn from its start: the teacher's message, then the answer.
+      var top = (box.parentNode || box).getBoundingClientRect().top - S.log.getBoundingClientRect().top;
+      S.log.scrollTop = Math.max(0, S.log.scrollTop + top - 8);
     };
     if (S.ai === 'ready' && S.client) {
       thinking = el('div', { 'class': 'll-msg ll-bot ll-thinking', text: t().thinking });
-      if (!hiddenLog()) { S.log.appendChild(thinking); S.log.scrollTop = S.log.scrollHeight; }
-      recommendAI(S.cat, S.client, text, { noAsk: noAsk }).then(done, function () {
+      if (!hiddenLog()) { (S.group || S.log).appendChild(thinking); S.log.scrollTop = S.log.scrollHeight; }
+      recommendAI(S.cat, S.client, text, { noAsk: noAsk, followUp: !!follow, exclude: follow && follow.exclude }).then(done, function () {
         // Model crashed or timed out: keyword matching from here on, same question answered.
         modelFailed();
-        done(recommendRules(S.cat, text));
+        done(recommendRules(S.cat, text, follow));
       });
     } else {
-      done(recommendRules(S.cat, text));
+      done(recommendRules(S.cat, text, follow));
     }
   }
 
@@ -1517,7 +1690,7 @@
         box.appendChild(el('p', { text: L.askAge }));
         pend.type = 'age'; pend.choices = [0, 1, 2, 3, 4];
       } else {
-        var msg = res.askType === 'skill' ? L.askSkill
+        var msg = res.askType === 'skill' ? (res.noMore ? L.noMore : L.askSkill)
           : res.askType === 'reading' ? L.noReading
           : fmt(res.minAge != null ? L.noSkillAge : L.noSkillLevel, { skill: skillLabel(res.skill), age: res.minAge }) + (res.choices.length ? (uiLang() === 'zh' ? '' : ' ') + L.tryThese : '');
         box.appendChild(el('p', { text: msg }));
@@ -1535,6 +1708,7 @@
         list.appendChild(card(it));
       });
       box.appendChild(list);
+      if (res.source === 'ai') box.appendChild(el('p', { 'class': 'll-small ll-foot', text: L.modeAI }));
       if (res.narrow && res.source === 'rules' && isLast) {
         box.appendChild(el('p', { 'class': 'll-small', text: L.askAge }));
         box.appendChild(choiceChips({ type: 'age', text: turn.text, choices: [0, 1, 2, 3, 4] }, true));
@@ -1556,33 +1730,72 @@
       wrap.appendChild(el('button', {
         type: 'button', 'class': 'll-chip', disabled: !active,
         on: { click: function () { S.pending = { type: pending.type, text: pending.text, choices: pending.choices, lang: S.lang }; submit(choiceLabel(pending, i)); } },
-      }, numbered ? [el('span', { 'class': 'll-tag', 'aria-hidden': 'true', text: String(i + 1) }), label] : [label]));
+      }, numbered ? [el('span', { 'class': 'll-num', 'aria-hidden': 'true', text: String(i + 1) }), label] : [label]));
     });
     return wrap;
   }
 
+  // The widget never sends anyone to a paid game itself. On the library page it
+  // clicks the library's own card, which already decides what happens (free
+  // games open, locked games show the plan pop-up, members go straight in).
+  // Anywhere else: a free game opens from this site, a paid one goes to /library.
+  // Addresses are always location.origin + path, never an absolute site address.
   function openGame(g) {
     track('ll_game_click');
-    try { window.open(g.url, '_blank', 'noopener'); } catch (e) { /* popup blocked */ }
+    var host = null;
+    try { host = document.querySelector('a.card[data-title="' + cssString(g.title) + '"]'); } catch (e) { host = null; }
+    if (host) { host.click(); return; }
+    if (g.pub) {
+      try { window.open(location.origin + g.path, '_blank', 'noopener'); } catch (e) { /* popup blocked */ }
+    } else {
+      location.assign(location.origin + '/library');
+    }
   }
+
+  function cssString(v) { return String(v).replace(/["\\]/g, '\\$&').replace(/\n/g, ' '); }
 
   var TIER_CODE = { free: '1', parent: '2', teacher: '3' };
 
-  function tags(g, it, L) {
+  // The plan label is the only coloured pill. Skill, mode, level and
+  // kid-themed follow as one plain line: "Speaking · Teacher-led · Level A2".
+  function meta(g, it, L, lt) {
     var zh = S.lang === 'zh';
-    var skill = (S.cat.skills[g.skill] || {})[zh ? 'zh' : 'en'] || '';
-    return el('div', { 'class': 'll-tags' }, [
+    var parts = [(S.cat.skills[g.skill] || {})[zh ? 'zh' : 'en'] || '', L.mode[g.mode] || ''];
+    if (lt) parts.push(fmt(L.level, { l: lt }));
+    if (it.kid) parts.push(L.kid);
+    return el('div', { 'class': 'll-meta' }, [
       el('span', { 'class': 'll-tier', 'data-t': TIER_CODE[g.tier] || '2', text: L.tier[g.tier] || '' }),
-      skill ? el('span', { 'class': 'll-tag', text: skill }) : null,
-      el('span', { 'class': 'll-tag', text: L.mode[g.mode] || '' }),
-      it.kid ? el('span', { 'class': 'll-tag', text: L.kid }) : null,
+      el('span', { text: parts.filter(Boolean).join(' · ') }),
     ]);
   }
+
+  // Paid cards only: say that a click opens the plan details, so the site's
+  // plan pop-up is no surprise.
+  function planNote(g, L) { return g.tier === 'free' ? null : el('p', { 'class': 'll-small ll-plan', text: L.planNote }); }
 
   function levelText(g) {
     var r = levelRange(g);
     if (!r) return '';
     return r[0] === r[1] ? LEVELS[r[0]] : LEVELS[r[0]] + '–' + LEVELS[r[1]];
+  }
+
+  // Descriptions show three lines. A longer one gets a "more" toggle after it;
+  // nothing is cut with an ellipsis. Measured once the card is on screen.
+  function fitDescs(root) {
+    if (!root || !root.querySelectorAll) return;
+    var L = t();
+    Array.prototype.forEach.call(root.querySelectorAll('.ll-desc'), function (d) {
+      if (d._llFit || !d.offsetParent) return;
+      d._llFit = true;
+      if (d.scrollHeight <= d.clientHeight + 1) return;
+      var more = el('button', { type: 'button', 'class': 'll-more', 'aria-expanded': 'false', text: L.more, on: { click: function () {
+        var opening = !d.classList.contains('ll-open');
+        d.classList.toggle('ll-open', opening);
+        more.textContent = opening ? t().less : t().more;
+        more.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      } } });
+      d.parentNode.insertBefore(more, d.nextSibling);
+    });
   }
 
   // Everything shown here comes from the catalogue, never from the model.
@@ -1592,7 +1805,7 @@
       var members = it.ids.map(function (id) { return byId[id]; });
       // Same class names as every other card and chip, so the page code does not
       // single out this card.
-      var levels = el('div', { 'class': 'll-tags' });
+      var levels = el('div', { 'class': 'll-chips' });
       members.forEach(function (g) {
         levels.appendChild(el('button', {
           type: 'button', 'class': 'll-chip', 'aria-label': g.title,
@@ -1601,21 +1814,20 @@
       });
       return el('li', { 'class': 'll-card' }, [
         el('p', { 'class': 'll-card-title', text: it.family }),
-        tags(members[0], it, L),
+        meta(members[0], it, L, ''),
+        planNote(members[0], L),
         el('p', { 'class': 'll-small', text: L.pickLevel }),
         levels,
       ]);
     }
     var g = byId[it.id];
     var how = (zh ? g.how_zh : null) || g.how_en || null;
-    var lt = levelText(g);
-    var tagRow = tags(g, it, L);
-    if (lt) tagRow.appendChild(el('span', { 'class': 'll-tag', text: fmt(L.level, { l: lt }) }));
     return el('li', { 'class': 'll-card' }, [
       el('button', { type: 'button', 'class': 'll-card-title', on: { click: function () { openGame(g); } } }, [
         g.title, el('span', { 'class': 'll-ext', 'aria-hidden': 'true', text: ' ↗' }),
       ]),
-      tagRow,
+      meta(g, it, L, levelText(g)),
+      planNote(g, L),
       el('p', { 'class': 'll-desc', text: zh ? g.desc_zh : g.desc_en }),
       how ? el('p', { 'class': 'll-how' }, [el('strong', { text: L.how + ' ' }), how]) : null,
     ]);
@@ -1635,7 +1847,7 @@
         return S.turns.map(function (tu) {
           if (tu.who === 'you') return { who: 'you', text: tu.text };
           var r = tu.res;
-          return { who: 'bot', kind: r.kind, askType: r.askType || null, source: r.source || null, ids: (r.ids || []).slice(), items: JSON.parse(JSON.stringify(r.items || [])), kidNote: !!r.kidNote };
+          return { who: 'bot', kind: r.kind, askType: r.askType || null, noMore: !!r.noMore, source: r.source || null, ids: (r.ids || []).slice(), items: JSON.parse(JSON.stringify(r.items || [])), kidNote: !!r.kidNote };
         });
       },
       // Tests only: swap the model client for a fake.

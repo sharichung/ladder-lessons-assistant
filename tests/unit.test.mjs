@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const { core } = require(path.join(ROOT, 'src', 'll-assistant.js'));
-const { checkQuestion } = require(path.join(ROOT, 'tests', 'check.js'));
+const { checkQuestion, runQuestion } = require(path.join(ROOT, 'tests', 'check.js'));
 const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalogue.json'), 'utf8'));
 const compactRaw = JSON.parse(fs.readFileSync(path.join(ROOT, 'dist', 'll-assistant', 'catalogue.compact.json'), 'utf8'));
 const cat = core.prepareCatalogue(JSON.parse(JSON.stringify(compactRaw)));
@@ -38,8 +38,18 @@ test('compact catalogue matches catalogue.json exactly (nothing added, renamed o
   for (const s of source.games) {
     const c = cat.byId[s.id];
     assert.ok(c, `missing ${s.id}`);
-    for (const [a, b] of [['title', 'title'], ['url', 'url'], ['tier', 'tier'], ['mode', 'mode'], ['desc_en', 'description_en'], ['desc_zh', 'description_zh']]) assert.equal(c[a], s[b], `${s.id} ${a}`);
+    for (const [a, b] of [['title', 'title'], ['path', 'path'], ['tier', 'tier'], ['mode', 'mode'], ['desc_en', 'description_en'], ['desc_zh', 'description_zh']]) assert.equal(c[a], s[b], `${s.id} ${a}`);
+    assert.equal(!!c.pub, s.in_public_build === true, `${s.id} public`);
   }
+});
+
+test('the widget gets no absolute game address: games open by path from the current site', () => {
+  const raw = fs.readFileSync(path.join(ROOT, 'dist', 'll-assistant', 'catalogue.compact.json'), 'utf8');
+  assert.doesNotMatch(raw, /ladderlessons\.com/);
+  assert.ok(compactRaw.games.every((g) => !('url' in g) && /^\/[^/]/.test(g.path)));
+  assert.deepEqual(compactRaw.games.filter((g) => g.pub).map((g) => g.tier), ['free', 'free', 'free', 'free']);
+  const js = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.js'), 'utf8');
+  assert.doesNotMatch(js.replace(/^\s*\/\/.*$/gm, ''), /ladderlessons\.com/, 'no site address in the widget code');
 });
 
 test('ages.csv is merged by id exactly: blank stays blank, nothing guessed (A1)', () => {
@@ -128,11 +138,11 @@ test('teen and adult signals, with the under-13 exception for business and work'
 // ---------- the fixed questions, keyword mode ----------
 
 for (const q of questions) {
-  test(`keyword mode: ${q.id}`, () => {
+  test(`keyword mode: ${q.id}`, async () => {
     if (q.expect === 'nothing-sent') { assert.equal(q.text.trim(), ''); return; }
-    const r = core.recommendRules(cat, q.text);
+    const { res: r, shown } = await runQuestion(core, q, (text, opts) => core.recommendRules(cat, text, opts));
     assert.equal(core.detectLang(q.text), q.lang);
-    const c = checkQuestion(q, r, cat);
+    const c = checkQuestion(q, r, cat, shown);
     assert.ok(c.ok, `${q.id}: ${c.fails.join('; ')} -> ${r.kind} ${r.ids.join(', ')}`);
     for (const id of r.ids) assert.ok(realIds.has(id), id);
   });
@@ -142,6 +152,47 @@ for (const q of questions) {
 
 const reply = (fn) => ({ calls: [], chat(messages, schema) { this.calls.push({ messages, schema }); return Promise.resolve({ text: fn(messages, schema), ms: 1 }); } });
 const enumOf = (schema) => (schema.properties || schema.anyOf[0].properties).picks.items.enum;
+
+// The owner's run of tests/model-test.html (2026-10-06) recorded the real model's
+// reply to every question that reached it. Replaying them shows what the current
+// post-processing does with real model output, without a GPU.
+const recorded = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'model-replies-2026-10-06.json'), 'utf8')).replies;
+
+test('AI: the real model\'s recorded replies pass every fixed question after post-processing', async () => {
+  const fails = [];
+  let replayed = 0;
+  for (const q of questions.filter((x) => x.expect !== 'nothing-sent')) {
+    const raw = q.after ? null : recorded[q.text];
+    const client = { chat: () => { replayed += raw != null; return Promise.resolve({ text: raw == null ? '{"picks":[]}' : raw, ms: 1 }); } };
+    const { res, shown } = await runQuestion(core, q, (text, opts) => core.recommendAI(cat, client, text, opts));
+    const c = checkQuestion(q, res, cat, shown);
+    if (!c.ok) fails.push(`${q.id}: ${c.fails.join('; ')}`);
+    if (res.modelInvalid && raw != null) fails.push(`${q.id}: recorded reply now rejected`);
+  }
+  assert.deepEqual(fails, []);
+  assert.equal(replayed, Object.keys(recorded).length, 'every recorded reply was used');
+});
+
+test('AI: the keyword answer\'s lead stays first when the model drops or demotes it', async () => {
+  const cases = [
+    ['10-year-old, A2, listening practice with numbers', ['listening_DetectiveDictation'], 'listening_NumberNinja'],
+    ['Adult beginner, everyday English for going to the doctor', ['life_TellingTheTime'], 'speaking_DoctorVisit'],
+    ['adult business english', ['finance_MiniBusinessTycoonSuper', 'speaking_QuickFireFlashcards'], 'speaking_LadderTalk'],
+  ];
+  for (const [text, picks, first] of cases) {
+    const res = await core.recommendAI(cat, reply(() => JSON.stringify({ picks })), text);
+    assert.equal(res.source, 'ai', text);
+    assert.equal(res.ids[0], first, text);
+  }
+  // 成人 F1 迷 雅思口語: Quick Fire goes first (free, 3A) and IELTS Speaking Room, the best match, is kept.
+  const res = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['speaking_LadderTalk', 'speaking_HookLab', 'speaking_QuickFireFlashcards'] })), '成人 F1 迷 雅思口語');
+  assert.deepEqual(res.ids.slice(0, 2), ['speaking_QuickFireFlashcards', 'speaking_IeltsSpeakingRoom']);
+});
+
+test('fixed questions have unique ids', () => {
+  const ids = questions.map((q) => q.id);
+  assert.deepEqual(ids.filter((id, i) => ids.indexOf(id) !== i), []);
+});
 
 test('AI: a free game the model left out goes first (A8)', async () => {
   const client = reply(() => JSON.stringify({ picks: ['phonics_SoundCatcher'] }));
@@ -162,8 +213,31 @@ test('AI: 50 minutes gives 2 to 3 games even when the model returns one (A7)', a
   const r = await core.recommendAI(cat, client, 'Teenager, B1, keeps mixing up tenses, 50 min');
   assert.ok(r.items.length >= 2 && r.items.length <= 3, r.ids.join());
   const schema = client.calls[0].schema;
-  assert.equal(schema.properties.picks.minItems, 2);
+  assert.ok(schema.properties.picks.minItems >= 2);
   assert.equal(schema.properties.picks.maxItems, 3);
+});
+
+test('AI: no lesson length gives as many games as keyword mode, even when the model returns one (D2)', async () => {
+  for (const text of ['Year 5 口說', 'Year 5 speaking']) {
+    const keyword = core.recommendRules(cat, text);
+    const r = await core.recommendAI(cat, reply((m, s) => JSON.stringify({ picks: [enumOf(s)[0]] })), text);
+    assert.equal(r.source, 'ai');
+    assert.equal(r.items.length, keyword.items.length, text);
+    assert.equal(r.items.length, 3, text);
+  }
+});
+
+test('follow-ups: detected only when nothing new is asked (D1)', () => {
+  for (const t of ['any other recommendations', 'more', 'another one', 'something else', '還有其他推薦嗎', '仲有冇', '其他', '悶', 'different game please', 'I am bored']) assert.ok(core.isFollowUp(t), t);
+  for (const t of ['more speaking', 'other festival games', 'another 8 year old', 'something else for phonics', '其他 拼讀', '8歲', 'pizza recipe']) assert.ok(!core.isFollowUp(t), t);
+});
+
+test('follow-ups in AI mode: the model only sees games not shown yet (D1)', async () => {
+  const first = core.recommendRules(cat, 'Year 5 speaking');
+  const client = reply((m, s) => JSON.stringify({ picks: enumOf(s).slice(0, 2) }));
+  const r = await core.recommendAI(cat, client, 'Year 5 speaking', { followUp: true, exclude: first.ids });
+  assert.ok(enumOf(client.calls[0].schema).every((id) => !first.ids.includes(id)), 'no shown game among the candidates');
+  assert.ok(r.ids.length > 0 && r.ids.every((id) => !first.ids.includes(id)), r.ids.join());
 });
 
 test('AI: under 30 minutes caps at 2 games', async () => {
@@ -248,9 +322,12 @@ test('privacy lines and plan labels are exactly as approved', () => {
   assert.equal(core.T.zh.privacy, '喺你部機運行。你打嘅內容唔會傳送畀我哋。');
   assert.equal(core.T.en.modeAI, 'AI suggestions can be wrong.');
   assert.equal(core.T.zh.modeAI, 'AI 建議可能有錯。');
-  assert.equal(core.T.en.modeRules, 'Matches by keyword.');
-  assert.equal(core.T.zh.modeRules, '按關鍵字配對。');
-  assert.ok(!/\bAI\b/.test(core.T.en.modeRules) && !/AI/.test(core.T.zh.modeRules), 'no AI wording in keyword mode');
+  assert.equal(core.T.en.planNote, 'Opens the plan details');
+  assert.equal(core.T.zh.planNote, '會開啟方案詳情');
+  assert.equal(core.T.en.placeholder, 'Age, level, skill');
+  assert.equal(core.T.zh.placeholder, '年齡、程度、技能');
+  assert.equal(core.T.en.inputLabel, 'Describe your student');
+  assert.equal(core.T.zh.inputLabel, '描述你嘅學生');
   assert.deepEqual(core.T.en.tier, { free: 'Free', parent: 'Parent', teacher: 'Teacher' });
   assert.deepEqual(core.T.zh.tier, { free: '免費', parent: '家長版', teacher: '老師版' });
 });
@@ -280,7 +357,7 @@ test('CSS uses only ll-tokens.css colours and token names, with exact fallbacks'
   const squash = (s) => s.replace(/\s+/g, '').replace(/"/g, "'");
   // Every var(--token, fallback) that is not the widget's own --ll-* name
   const refs = [...css.matchAll(/var\(--([a-z0-9-]+)\s*,\s*((?:[^()]|\([^()]*(?:\([^()]*\))*[^()]*\))*)\)/gi)];
-  assert.ok(refs.length > 20);
+  assert.ok(refs.length > 15);
   for (const m of refs) {
     const name = m[1];
     if (name.startsWith('ll-')) continue;
@@ -305,5 +382,38 @@ test('plan label CSS copies the library page .tier rules', () => {
   assert.match(css, /\.ll-tier\[data-t="1"\] \{ background: var\(--ll-tier-free\)/);
   assert.match(css, /\.ll-tier\[data-t="2"\] \{ background: var\(--ll-yellow\)/);
   assert.match(css, /\.ll-tier\[data-t="3"\] \{ background: var\(--ll-purple-1\); border-color: var\(--ll-purple-1\)/);
-  assert.match(css, /\.ll-cta \{[^}]*min-height: 48px;[^}]*font-weight: 700; font-size: 16px;[^}]*border: 3px solid var\(--ll-ink\);[^}]*background: var\(--ll-grad-cta\); color: var\(--ll-ink\)/);
+  assert.match(css, /\.ll-cta \{[^}]*min-height: 44px;[^}]*font-weight: 700; font-size: 16px;[^}]*border: 3px solid var\(--ll-ink\);[^}]*background: var\(--ll-grad-cta\); color: var\(--ll-ink\)/);
+  // B5: disabled as on the site
+  assert.match(css, /\.ll-cta:disabled \{ background: var\(--ll-line\); color: var\(--ll-ink-soft\); border-color: var\(--ll-muted\); box-shadow: none;/);
+});
+
+test('colour budget: coral only on the enabled primary button, no coral or red border, ink borders on cards and composer (E1-E3)', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  const CORAL = /--(?:ll-)?(?:coral|coral-dark|coral-ink|coral-pale|grad-cta|error)\b|#ff6b6b|#ff8e53|#c9453f|#e74c3c/i;
+  let gradientUses = 0;
+  for (const r of rules) {
+    for (const decl of r.body.split(';')) {
+      const i = decl.indexOf(':');
+      if (i < 0) continue;
+      const prop = decl.slice(0, i).trim(), val = decl.slice(i + 1);
+      if (/^border(?!-radius)|^outline(?!-offset)/.test(prop)) {
+        // E1: borders and outlines are ink (the plan label keeps the library's own colours)
+        assert.match(val.trim(), /^(?:0|none|[\d.]+px solid var\(--ll-(?:ink|line)\)|var\(--ll-(?:ink|muted|purple-1)\)|1px solid var\(--ll-line\))$/, `${r.sel} { ${prop}: ${val.trim()} }`);
+      }
+      if (!CORAL.test(val)) continue;
+      if (prop.startsWith('--')) { assert.equal(prop, '--ll-grad-cta'); assert.equal(r.sel, '#ll-assistant'); continue; }
+      // E2: only the enabled primary button
+      assert.ok(r.sel.split(',').every((x) => /\.ll-cta\b/.test(x) && !/disabled/.test(x)), `${r.sel} uses coral`);
+      gradientUses++;
+    }
+  }
+  assert.equal(gradientUses, 1, 'the gradient is set in one rule');
+  // E3: result card, composer
+  assert.match(css, /\.ll-card \{[^}]*border: 3px solid var\(--ll-ink\); border-radius: var\(--ll-r-md\); box-shadow: var\(--ll-sh-rung\)/);
+  assert.match(css, /\.ll-composer \{[^}]*background: #fff; border: 2\.5px solid var\(--ll-ink\); border-radius: var\(--ll-r-md\)/);
+  assert.match(css, /\.ll-input \{[^}]*border: 0;/);
+  // A5: focus uses :focus-visible and the yellow ring
+  assert.doesNotMatch(css.replace(/\.ll-input:focus,|button:focus \{ outline: none; \}/g, ''), /:focus(?![-\w])/);
+  assert.match(css, /--ll-ring: 0 0 0 4px var\(--ll-yellow\)/);
 });

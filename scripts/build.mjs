@@ -19,7 +19,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist', 'll-assistant');
 
 const LEVELS = ['pre-A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const REQUIRED = ['id', 'title', 'url', 'category', 'tier', 'free', 'mode',
+const REQUIRED = ['id', 'title', 'path', 'category', 'tier', 'free', 'mode',
   'description_en', 'description_zh', 'keywords'];
 
 // Must match the record in @mlc-ai/web-llm's prebuiltAppConfig. Checked below.
@@ -38,7 +38,11 @@ for (const g of source.games) {
   }
   if (seen.has(g.id)) problems.push(`${g.id}: duplicate id`);
   seen.add(g.id);
-  if (!/^https:\/\/ladderlessons\.com\//.test(g.url || '')) problems.push(`${g.id}: url is not on https://ladderlessons.com/`);
+  // Games are opened by site-relative path only (location.origin + path), so the
+  // same widget works on ladderlessons.com and app.ladderlessons.com.
+  if (!/^\/[^/]/.test(g.path || '')) problems.push(`${g.id}: path must start with a single "/"`);
+  if (typeof g.in_public_build !== 'boolean') problems.push(`${g.id}: "in_public_build" must be true or false`);
+  if (g.in_public_build && g.tier !== 'free') problems.push(`${g.id}: a paid game is marked in_public_build`);
   if (!['free', 'parent', 'teacher'].includes(g.tier)) problems.push(`${g.id}: unknown tier "${g.tier}"`);
   if (g.free !== (g.tier === 'free')) problems.push(`${g.id}: "free" and "tier" disagree`);
   if (!['led', 'solo'].includes(g.mode)) problems.push(`${g.id}: unknown mode "${g.mode}"`);
@@ -160,11 +164,13 @@ const compact = {
     const e = extra[g.id] || {};
     const a = ages[g.id] || {};
     const out = {
-      id: g.id, title: g.title, url: g.url, skill: g.category,
+      id: g.id, title: g.title, path: g.path, skill: g.category,
       tier: g.tier, mode: g.mode,
       desc_en: g.description_en, desc_zh: g.description_zh,
       kw: g.keywords,
     };
+    // pub: the game is on the public site. Paid games are never linked directly.
+    if (g.in_public_build) out.pub = true;
     if (a.age_min != null) out.age_min = a.age_min;
     if (a.age_max != null) out.age_max = a.age_max;
     if (a.level_min) out.level_min = a.level_min;

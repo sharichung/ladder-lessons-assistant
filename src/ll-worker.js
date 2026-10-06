@@ -14,6 +14,9 @@
 import { MLCEngine, prebuiltAppConfig } from './vendor/web-llm.js';
 
 let engine = null;
+// Speed of each answer, from WebLLM's own usage figures. engine.runtimeStatsText()
+// cannot be used: resetChat() after every answer clears it (it reported NaN).
+const speeds = [];
 const post = (m) => self.postMessage(m);
 const errText = (e) => String((e && (e.message || e.name)) || e).slice(0, 300);
 
@@ -49,6 +52,8 @@ async function chat(m) {
     out = await engine.chat.completions.create(request);
   }
   await engine.resetChat().catch(() => {});
+  const x = out.usage && out.usage.extra;
+  if (x && x.prefill_tokens_per_s > 0 && x.decode_tokens_per_s > 0) speeds.push([x.prefill_tokens_per_s, x.decode_tokens_per_s]);
   const text = (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content) || '';
   post({ type: 'reply', id: m.id, text, ms: Math.round(performance.now() - t0), usage: out.usage || null });
 }
@@ -63,7 +68,7 @@ self.onmessage = async ({ data: m }) => {
     try { await chat(m); }
     catch (e) { post({ type: 'error', stage: 'chat', id: m.id, message: errText(e) }); }
   } else if (m.type === 'stats') {
-    try { post({ type: 'stats', text: engine ? await engine.runtimeStatsText() : '' }); }
-    catch (e) { post({ type: 'stats', text: '' }); }
+    const avg = (i) => Math.round(speeds.reduce((sum, v) => sum + v[i], 0) / speeds.length);
+    post({ type: 'stats', text: speeds.length ? `prefill: ${avg(0)} tokens/sec, decoding: ${avg(1)} tokens/sec (average of ${speeds.length} answers)` : '' });
   }
 };

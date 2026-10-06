@@ -6,7 +6,10 @@
 // cat:    the prepared compact catalogue (byId), used to look up free and kid_theme.
 //
 // Question fields (all optional except text and expect):
-//   expect      picks | none | ask-skill | ask-age | ask-reading | ask-noGames | nothing-sent
+//   expect      picks | none | ask-skill | ask-age | ask-reading | ask-noGames | ask-more | nothing-sent
+//               (ask-more: a follow-up with no game left; it says so and offers skills)
+//   after       a message sent first, in the same conversation (D1 follow-ups)
+//   newOnly     no game shown for the "after" message is shown again
 //   anyOf       at least one of these ids is shown
 //   first       the first card is this game
 //   notFirst    the first card is none of these
@@ -29,7 +32,19 @@
   function idsOf(items) { return (items || []).reduce(function (a, it) { return a.concat(it.ids || [it.id]); }, []); }
   function firstGame(items) { return items && items.length ? (items[0].ids ? items[0].ids[0] : items[0].id) : null; }
 
-  function checkQuestion(q, res, cat) {
+  // Runs a question the way the widget does: the "after" message first, then the
+  // question, which is a follow-up of it when core.isFollowUp says so.
+  // recommend(text, opts) returns a result or a promise of one.
+  function runQuestion(core, q, recommend) {
+    return Promise.resolve(q.after ? recommend(q.after) : null).then(function (prev) {
+      var shown = prev && prev.kind === 'picks' ? idsOf(prev.items) : [];
+      var follow = core.isFollowUp && core.isFollowUp(q.text);
+      var res = follow ? recommend(q.after || '', { followUp: true, exclude: shown }) : recommend(q.text);
+      return Promise.resolve(res).then(function (r) { return { res: r, shown: shown }; });
+    });
+  }
+
+  function checkQuestion(q, res, cat, shownBefore) {
     var fails = [];
     function fail(msg) { fails.push(msg); }
     var byId = cat.byId;
@@ -44,12 +59,15 @@
     if (want === 'nothing-sent') return { ok: true, fails: [] };
     if (want === 'picks' && res.kind !== 'picks') fail('expected picks, got ' + res.kind + (res.askType ? ':' + res.askType : ''));
     if (want === 'none' && res.kind !== 'none') fail('expected none, got ' + res.kind);
-    if (/^ask-/.test(want)) {
+    if (want === 'ask-more') {
+      if (res.kind !== 'ask' || res.askType !== 'skill' || !res.noMore) fail('expected "no more games" with skill choices, got ' + res.kind + (res.askType ? ':' + res.askType : ''));
+    } else if (/^ask-/.test(want)) {
       var type = want.slice(4);
       if (res.kind !== 'ask' || res.askType !== type) fail('expected ask ' + type + ', got ' + res.kind + (res.askType ? ':' + res.askType : ''));
     }
+    if (q.newOnly && shownBefore) ids.forEach(function (id) { if (shownBefore.indexOf(id) >= 0) fail('shows ' + id + ' again'); });
 
-    if (q.anyOf && !ids.some(function (id) { return q.anyOf.indexOf(id) >= 0; })) fail('none of anyOf shown (' + ids.join(', ') + ')');
+    if (q.anyOf && !ids.some(function (id) { return q.anyOf.indexOf(id) >= 0; })) fail('none of ' + q.anyOf.join(', ') + ' shown; shows ' + (ids.join(', ') || 'nothing'));
     if (q.first && first !== q.first) fail('first is ' + first + ', expected ' + q.first);
     if (q.notFirst && q.notFirst.indexOf(first) >= 0) fail('first is ' + first + ', which is not allowed first');
     if (q.firstNotKid && first && byId[first] && byId[first].kid) fail('first is kid-themed: ' + first);
@@ -79,5 +97,5 @@
     return { ok: fails.length === 0, fails: fails };
   }
 
-  return { checkQuestion: checkQuestion, idsOf: idsOf, firstGame: firstGame };
+  return { checkQuestion: checkQuestion, runQuestion: runQuestion, idsOf: idsOf, firstGame: firstGame };
 });

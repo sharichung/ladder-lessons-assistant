@@ -13,7 +13,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const v2 = require(path.join(ROOT, 'src', 'll-assistant.js')).core;
 const v1 = require(path.join(ROOT, 'tests', 'baseline', 'll-assistant.v1.js')).core;
-const { checkQuestion } = require(path.join(ROOT, 'tests', 'check.js'));
+const { checkQuestion, runQuestion } = require(path.join(ROOT, 'tests', 'check.js'));
 
 const cat = v2.prepareCatalogue(JSON.parse(fs.readFileSync(path.join(ROOT, 'dist', 'll-assistant', 'catalogue.compact.json'), 'utf8')));
 const catV1 = v1.prepareCatalogue(JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'baseline', 'catalogue.v1.json'), 'utf8')));
@@ -36,10 +36,11 @@ let before = 0, after = 0, total = 0;
 for (const q of questions) {
   if (q.expect === 'nothing-sent') continue;
   total++;
+  // The old code has no follow-ups: it gets the follow-up message on its own.
   const r1 = normaliseV1(v1.recommendRules(catV1, q.text));
-  const r2 = v2.recommendRules(cat, q.text);
+  const { res: r2, shown } = await runQuestion(v2, q, (text, opts) => v2.recommendRules(cat, text, opts));
   const c1 = checkQuestion(q, r1, cat);
-  const c2 = checkQuestion(q, r2, cat);
+  const c2 = checkQuestion(q, r2, cat, shown);
   if (c1.ok) before++;
   if (c2.ok) after++;
   rows.push({ q, r1, r2, c1, c2 });

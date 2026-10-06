@@ -47,9 +47,9 @@ Deploy **one folder: `dist/ll-assistant/`**. Copy it as-is into the main site, f
 
 | File | Size (gzip) | When it loads |
 |---|---|---|
-| `ll-assistant.js` | 85 KB (28 KB) | Page load, `defer` |
-| `ll-assistant.css` | 12 KB (3 KB) | Page load, added by the script |
-| `catalogue.compact.json` | 41 KB (15 KB) | When the teacher opens the widget |
+| `ll-assistant.js` | 97 KB (32 KB) | Page load, `defer` |
+| `ll-assistant.css` | 15 KB (4 KB) | Page load, added by the script |
+| `catalogue.compact.json` | 41 KB (16 KB) | When the teacher opens the widget |
 | `ll-worker.js` | 3 KB | Only after the download click, or when the model is already cached |
 | `vendor/web-llm.js` | 6.3 MB (2.2 MB) | Only after the download click, or when the model is already cached |
 | `vendor/web-llm.LICENSE.txt` | | Apache 2.0 licence for WebLLM. Keep it with the library |
@@ -57,10 +57,10 @@ Deploy **one folder: `dist/ll-assistant/`**. Copy it as-is into the main site, f
 Then add one line before `</body>` on the pages where teachers should see it:
 
 ```html
-<script src="/ll-assistant/ll-assistant.js" defer data-avoid="#your-email-gate"></script>
+<script src="/ll-assistant/ll-assistant.js" defer data-avoid="#your-email-gate, #your-lock-popup"></script>
 ```
 
-- Replace `#your-email-gate` with the CSS selector of the email gate. The widget hides itself while any element matching that selector is visible. You can list several, separated by commas.
+- Replace `#your-email-gate` with the CSS selector of the email gate, and `#your-lock-popup` with the selector of the library's lock pop-up (the plan pop-up a locked game opens). The widget hides itself while any element matching these selectors is visible, so the pop-up is never behind the widget. You can list several, separated by commas.
 - **Put it on library and browse pages, not on game pages.** Teachers share the game page on screen, and the button would be visible to students.
 - The folder must be on the same domain as the page, because browsers only start Web Workers from the same origin.
 
@@ -86,7 +86,7 @@ Optional attributes on the script tag:
 
 | File | What it holds | Who edits it |
 |---|---|---|
-| `catalogue.json` | The only source of games: ids, titles, URLs, plans, descriptions, keywords | Exported from `games/library.html` |
+| `catalogue.json` | The only source of games: ids, titles, paths, plans, `in_public_build`, descriptions, keywords | Exported from `games/library.html` |
 | `ages.csv` | Per game: `age_min`, `age_max`, `level_min`, `level_max`, `kid_theme` | You |
 | `data/teacher-fields.csv` | Optional per-game "how to run it" line (`how_to_run_en`, `how_to_run_zh`) | You |
 | `ll-tokens.css` | Colours, radii, shadows and fonts copied from `library.html` | Copied from the site |
@@ -99,7 +99,9 @@ Optional attributes on the script tag:
   - an age that is not a whole number
   - a level outside pre-A1 to C2
   - `kid_theme` other than `Y` or blank
+  - a `path` that does not start with `/`, or a paid game marked `in_public_build`
 - Unit tests check that the compact file matches `catalogue.json` and `ages.csv` exactly.
+- The compact file has each game's `path` and a flag for the 4 public (free) games. It has **no absolute address**: `url` and `app_url` are not copied, so the widget cannot link a paid game to ladderlessons.com.
 
 **How the widget uses the data:**
 - **age_min is a hard filter.** A game is dropped when the student is younger than `age_min`. There is no upper age limit, because adult beginners use the same games, so `age_max` is kept in the file but never used.
@@ -108,7 +110,7 @@ Optional attributes on the script tag:
   - Words: beginner = pre-A1/A1, elementary = A1/A2, pre-intermediate = A2, intermediate = B1, upper-intermediate = B2, advanced = B2/C1.
   - A game with no level data always passes.
 - **kid_theme = Y is a ranking signal, never a filter.** For teen and adult queries those games go below all others, never first, and get a **Kid-themed** tag.
-- **"How to run it" appears only for games that have their own line** in `teacher-fields.csv`. Every card shows a Teacher-led / Student solo tag.
+- **"How to run it" appears only for games that have their own line** in `teacher-fields.csv`. Every card says Teacher-led or Student solo on its plain meta line.
 
 Ladder Talk's `age_min` is 10 (changed from 16 because teen topics were added).
 
@@ -152,8 +154,8 @@ Other ways of writing ages and school years that are recognised:
 - teen, secondary, Form/S/F/中 N, adult, 成人, DSE, IELTS
 - an exact age of 13 or more
 - "teenage" counts as a teen signal
-- business, 商業, 商務, and "work", except in homework, group work, worksheet or "work on"
-- office, 上班 and 職場
+- business, 商業, 商務, and "work", except in homework, group work, pair work, worksheet, "work on" and "work in groups"
+- office, 上班, 返工, 職場 and 工作 (not 工作紙, worksheet)
 
 Exception: when the teacher states an age under 13, "business" and "work" do not count. So "9 year old business game" still gets Mini Business Tycoon Junior.
 
@@ -166,6 +168,14 @@ Exception: when the teacher states an age under 13, "business" and "work" do not
   - other matching games
   - classroom tools
 - Games of the asked-for skill always come before keyword matches from other skills.
+- When two games score the same and the question is about teens, adults or work, the game written for older learners goes first ("工作英文" gives Ladder Talk before Community Helpers).
+
+**What counts as a match:**
+- 口說 (the site's tag) and 口語 (what many teachers type) are the same word. The catalogue uses both, so either one matches games tagged with the other, and the answer does not depend on which is typed.
+- School years in a game's keywords (P4, 小四, 中一, 中學) count only a little and never as the topic: the age filter already uses them. So "中一 商業英文" gets Ladder Talk, not Ladder Vocabulary.
+- "group work", "work on", "worksheet" and 工作紙 are not the topic "work".
+- **One keyword match is enough** when the message has a teaching word (English, 英文, lesson, class, practise, 練…) and nothing else but filler: "English for work" and 職場英文 give Ladder Talk and Ladder Frames; "我學生 6 歲，想練自我介紹" gives Intro Builder. Anything else needs a stronger match.
+- **No sign of a lesson, no games.** A message with no skill, age, level, lesson length, learner word or teaching word gets the off-topic reply, whatever keywords it hits. So "Book a meeting room in the office for Monday" stays off-topic although Ladder Talk has the keywords meeting and office. Of 132 off-topic test messages, 3 now get games, all with an adult word ("My adult son works in an office now"); 9 that used to get games no longer do.
 
 **Free game first.** A free game goes first when all of these hold:
 - it passed the filters
@@ -185,20 +195,17 @@ This applies in both modes. In AI mode, if the model leaves it out, the widget p
   - With no age, it asks the age first.
 - **No game of that skill for this age** (e.g. "5 year old grammar"): it says so, for example "Grammar games start at age 8", and offers the skills that do have games.
 
-**Older learners where every game is kid-themed** ("adult business english", "teenager, money"; all four Money English games are kid-themed):
-- The best game that isn't kid-themed goes first: a keyword match if there is one, otherwise a game whose catalogue text is about older learners, free first. Today that is Quick Fire Flashcards.
-- Then the line "No Money English game is designed for teens or adults yet. These are kid-themed:".
-- Then the kid-themed games, older ones first.
+**Kid-themed games for teens and adults** ("adult business english", "teenager, money"; all four Money English games are kid-themed):
+- A game that isn't kid-themed goes first: the best keyword match, otherwise a game whose catalogue text is about older learners, free first.
+- The line "No Money English game is designed for teens or adults yet. These are kid-themed:" appears before the kid-themed cards whenever their skill has no game for older learners. It never names a skill that does have one.
+- Then the kid-themed games: those of a skill with nothing for older learners first, then older ones first.
 
-**Ladder Talk and Ladder Frames do not come up for work or business English**, because their keywords don't mention business or work:
-- "adult business english" and "商務英文 上班族" give Quick Fire Flashcards, then kid-themed Money English games.
-- "English for work" gets the "could not match" reply.
-- They only appear when a speaking word is also typed, for example "working adults small talk".
+Today: "adult business english" and "商務英文 上班族" give **Ladder Talk**, the note, then Mini Business Tycoon Super and Young Entrepreneur. "English for work" and 職場英文 give Ladder Talk and Ladder Frames. Ladder Frames matches work, job, 求職 and 職場, but not "business" (its keywords don't have it).
 
-Adding words such as `business`, `work`, `商業` or `工作` to their keywords in the source would bring them in.
+**Follow-ups** ("any other recommendations", "more", "another one", "something else", 還有其他推薦嗎, 仲有冇, 其他, 悶), with no new age, level or skill: the previous question again, without any game already shown in this conversation. When nothing is left, the widget says "No more games fit that. Try another skill:" with numbered skill choices. A follow-up is never answered with "could not match"; as a first message it gets "Which skill?".
 
 **Short answers join the previous question.** A digit, a chip, or a reply that only gives an age ("she's 9", "9", "nine", "九", "佢今年九") or only gives a skill is added to the earlier question. A new full question starts fresh.
-- Games shown without an age come with the age buttons. Typing an age instead ("7", "she's 7", "7歲") also joins the earlier question. Any other reply starts fresh.
+- Games shown without an age come with the age buttons. Typing an age instead ("7", "she's 7", "7歲") also joins the earlier question. A reply with its own topic ("我學生 6 歲，想練自我介紹") is a new question.
 
 ### AI mode
 
@@ -206,11 +213,13 @@ Adding words such as `business`, `work`, `商業` or `工作` to their keywords 
 2. The best 12 games that pass the filters go to the model as candidates. Each candidate carries `age_min`, its level range and `kid_theme`, but no URL or price.
 3. WebLLM's grammar engine forces a JSON reply: `{"picks": [...]}` using candidate ids only, as many as the lesson length allows. It can reply `{"ask": "..."}` only when the teacher gave neither age nor level.
 4. The widget then validates the picks and applies the same post-processing as keyword mode, in this order:
+   - **the keyword answer's lead stays first**: its first card, and its best keyword match when a free game went in front of it. The model fills the other places but cannot drop or demote them. (This fixed the three AI failures in the owner's run: Number Ninja, Clinic Day and IELTS Speaking Room, and Ladder Talk for "adult business english".)
    - hard filters
-   - top up to the minimum number of games
+   - top up: never fewer cards than the keyword answer ("Year 5 口說" gives three even when the model returns one)
    - kid-themed games down
    - free game first
    - trim to the maximum
+   Follow-ups send the model only games not shown yet.
 5. A model question is never shown as written: the widget shows its own "How old are they?" with age buttons.
 6. Bad output falls back to keyword matching. So does a crash, a timeout (45 s) or a failed download, for the rest of the visit, and the teacher's text is kept.
 
@@ -226,18 +235,23 @@ One language per conversation. It changes only when a message has Chinese charac
 
 ## Look and feel
 
-- **Colours and shapes:**
-  - panel: `--cream`
-  - cards: white with `--sh-card`, no outline
-  - the teacher's message bubble: `--coral-pale` with `--ink` text
-  - secondary text: `--ink-soft`. Not `--muted`, which is too faint to read.
-  - progress bar: 12px, `--teal` fill (style guide)
-- **Plan labels** copy the library page's `.tier` rule exactly, including its colour contrast as on the site:
-  - free: `--tier-free`
-  - parent: `--yellow`
-  - teacher: `--purple-1`
-  - text: `--ink`
-- **The launcher, Download and Find games buttons** copy the site CTA (`_brand/ll-funnel.css` `.llf__btn`): coral gradient, ink text, 3px ink border, pill shape, 48px tall, with the same hover, pressed and disabled states.
+**Colour budget:** ink, cream and white carry the widget. Colour appears only in:
+- the plan label, the only coloured pill on a card (the library page's `.tier` rule: free `--tier-free`, parent `--yellow`, teacher `--purple-1`, ink text)
+- the yellow focus ring (`0 0 0 4px var(--yellow)`, keyboard focus only, the ink border stays)
+- the teacher's message bubble: `--teal-pale` with `--ink` text, on the right
+- the coral gradient, on exactly one element: the enabled **Find games** button (site CTA: ink text, 3px ink border; disabled: `#E5E7EB` background, `--ink-soft` text, `#9CA3AF` border, no shadow)
+
+No border is ever coral or red, in any state. Tests check every element's computed colours at rest, on hover, on keyboard focus and while pressed.
+
+**Parts:**
+- **Header:** the title on one line, the lock sentence (13px, normal weight, balanced lines), a 1px line under it. "AI suggestions can be wrong." appears as small text under each reply that came from the model.
+- **Result cards** copy the library game card: white, 3px ink border, `--r-md`, `--sh-rung`; they lift on hover and keyboard focus. The title is ink (Fredoka 600) with ↗, underlined on hover. Under it: the plan label and one plain `--ink-soft` line, for example "Speaking · Teacher-led · Level A2 · Kid-themed". Paid cards add "Opens the plan details" / 「會開啟方案詳情」. Descriptions show three lines, then a "more" toggle, never an ellipsis.
+- **The whole card opens the game.** The title stays the single button; its click area is stretched over the card, so there is one tab stop per card (plus "more"), the screen reader name is the game title, and the focus ring is drawn on the card. "more" sits above the click area and never opens the game.
+- **Buttons and chips:** white pills with an ink outline. Chips copy the library `.chip` (2.5px ink, Fredoka 600; lift and `--sh-rung` on hover). The launcher, Download and Cancel buttons are the same white pill with `--sh-rung`.
+- **Composer:** one white box with a 2.5px ink border; the text box (no border of its own) and the Find games button sit inside it, the button centred on one line and bottom-aligned when the text grows. The text box starts at one line and grows to four. Placeholder "Age, level, skill" / 「年齡、程度、技能」 (fits at 320px). Its own label, "Describe your student", is visually hidden. The focus ring is on the box.
+- **Conversation:** each teacher message and its reply form one group: 8px inside, 24px and a 1px line between groups; cards 8px apart. The intro and example chips are the empty state only. Thin scrollbar.
+- **Progress bar:** 12px, ink on the line colour (teal is outside the colour budget).
+- **Screenshots** at 320, 375 and 1280px with the site fonts are written to `tests/results/screenshots/` by `npm test`.
 - **Fonts:**
   - headings use `--ff-head` (Fredoka), body text `--ff-body` (Nunito), with Noto Sans HK for Chinese
   - the widget downloads no fonts itself
@@ -249,11 +263,7 @@ One language per conversation. It changes only when a message has Chinese charac
 
 ## Privacy and analytics
 
-**Header:**
-- **Line 1 (always shown):** "Runs in your browser. What you type is not sent to us." / 「喺你部機運行。你打嘅內容唔會傳送畀我哋。」
-- **Line 2:**
-  - AI model loaded: "AI suggestions can be wrong." / 「AI 建議可能有錯。」
-  - Keyword mode: "Matches by keyword." / 「按關鍵字配對。」
+**Header:** "Runs in your browser. What you type is not sent to us." / 「喺你部機運行。你打嘅內容唔會傳送畀我哋。」 Under each reply from the model: "AI suggestions can be wrong." / 「AI 建議可能有錯。」 (The keyword-mode line "Matches by keyword." is gone: the header now has the title and the lock sentence only.)
 
 **What leaves the device:**
 - There is no server. The widget's code sends nothing the teacher types, and nothing worked out from it, anywhere. The Clarity and Google Fonts notes below describe what other scripts and the browser itself can see.
@@ -276,17 +286,22 @@ One language per conversation. It changes only when a message has Chinese charac
 | `ll_download_started` | The teacher clicks Download | same pattern | same pattern |
 | `ll_download_finished` | The model has loaded after a download | same pattern | same pattern |
 | `ll_fallback_shown` | Keyword mode is used because the device can't run the AI or the AI failed, once per page | same pattern | same pattern |
-| `ll_game_click` | A game button is clicked | same pattern | same pattern |
+| `ll_game_click` | A result card or level button is clicked, once per click, before the hand-off below | same pattern | same pattern |
 
 - The only parameter is `event_category: "ll_assistant"`. No query text, no game id, no plan, no language.
 - GA4's own script adds its standard fields to every event (page URL, referrer, page title, browser language, screen size, its client and session ids). That is normal page analytics, not data from the conversation.
 - The widget has no `<form>`, so GA4's automatic form events never fire from it.
-- **Opening a game is a normal visit to that game's page on your site.** Your analytics count it like any page view, including that the visitor came from this page. That shows which game was opened, never what was typed.
+**Opening a game: the widget hands the click to the page.** It never sends anyone to a paid game itself.
+1. On the library page, it clicks the library's own card for that game (`a.card[data-title="<exact title>"]`) and does nothing else. The library decides: free games open, locked games show the site's lock pop-up with the buy button, members who own the game go straight in.
+2. On any other page: a free game opens at `location.origin + path`; a paid game goes to `location.origin + "/library"`.
+3. Addresses are always built from `location.origin`, so the same file works on ladderlessons.com and app.ladderlessons.com. A paid game's public address (which shows "you have been blocked") is never used. Tests run on both origins.
+
+**Privacy of the hand-off, stated plainly:** when the widget clicks a library card, the library's lock pop-up shows the game title and sends **its own** analytics events (`ll_lock_view` and others) **with the game title**. That is the library's existing behaviour, outside the widget. It means the site can see which locked game was opened from the widget, still nothing the teacher typed. Opening a free game is a normal page visit, which your analytics count like any other.
 
 **Microsoft Clarity (decision 7B: keep recording, remove every clue):**
 - The widget's root has `data-clarity-mask="true"`, so Clarity hides all text inside it. Clarity only checks that this attribute is present; the value doesn't matter.
 - Typing events stop at the widget, before Clarity's listeners or any other page script: input, change, all key events, the browser's before-input and text-input events, Chinese input-method events, text selection in the text box, and cut, copy and paste. This matters because without it, Clarity uploads an encoded fingerprint (a hash) of the typed text when the text box loses focus. The browser tests run the real Clarity library to confirm the fingerprint no longer appears.
-- Games open from buttons, not links, so Clarity's click records carry no game address.
+- Games open from buttons, not links, so Clarity's click records carry no game address. (In pause mode the library's lock pop-up appears while Clarity is still paused, because the widget is open.)
 - The widget's page code holds no game ids, sources or `lang` attributes. Plan colours come from a one-character code (`data-t="1|2|3"`), and class names never name a game, plan, skill or language.
 - Class names are the same for every kind of answer.
 - **What Clarity still records:**
@@ -321,7 +336,7 @@ One language per conversation. It changes only when a message has Chinese charac
 |---|---|
 | Model | `Qwen2.5-0.5B-Instruct-q4f16_1-MLC` (Qwen2.5 0.5B Instruct, 4-bit) |
 | Licence | Apache 2.0 (Qwen2.5-0.5B-Instruct) |
-| Download | Shown on the button in MB. Worked out from the model host when the widget opens. **Not yet measured on a real machine.** See [Measurements](#measurements). |
+| Download | **277 MB measured** in the browser cache on the owner's Mac. The button said 270 MB: its estimate (weights + tokenizer + runtime, read from the model host) is about 7 MB short. Not fixed yet. |
 | GPU memory | ~945 MB, from WebLLM's own figure (`vram_required_MB` in WebLLM 0.2.85) |
 | WebLLM | 0.2.85, pinned in `package.json` and copied into `vendor/` |
 
@@ -352,12 +367,15 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 **Chromium:** `npm test` uses `$CHROME_PATH` if set, otherwise installed Google Chrome.
 
 **The question set:**
-- `tests/questions.json` has 123 fixed questions in English and Chinese. They cover every failing case from the test round plus both review rounds' edge cases:
+- `tests/questions.json` has 147 fixed questions in English and Chinese. They cover every failing case from the test round plus every review round's edge cases:
   - kids, adults, IELTS, DSE and Form 4
   - phonics, reading and vocabulary levels
   - lesson lengths, in digits and in words
   - ages without a unit, number-word ranges, university years, F1 racing, "studied English 3 years"
   - request phrasings with an age but no skill
+  - business and work English (Ladder Talk expected), self-introduction, group work and 工作紙 for kids, 返工
+  - follow-ups in both languages (`after` = the message before; `newOnly` = no game repeated), including "nothing left"
+  - "Year 5 口說" / "Year 5 speaking" with three games
   - off-topic messages, with and without an age
   - prompt injection in English and Chinese
   - an empty message
@@ -372,6 +390,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
   - levels, lesson length, skills
   - teen/adult signals and the under-13 exception
 - **All fixed questions** in keyword mode.
+- **The real model's replies:** `tests/fixtures/model-replies-2026-10-06.json` holds the 94 replies Qwen2.5-0.5B gave on the owner's Mac. Replaying them through the old code gives exactly the owner's 119/122; through the current code, 122/122.
 - **AI post-processing** with scripted models:
   - free game first
   - 2–3 games for 50 minutes
@@ -390,8 +409,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
    - page load fetches only the script and CSS; no layout shift
    - header wording
    - every fixed question through the real UI
-   - card names, plan label wording and colour, mode, level and kid tags
-   - each game button opens exactly its catalogue URL
+   - card names, plan label wording and colour, the plain meta line, the plan note on paid cards, no other coloured element
    - no links, ids, `lang` attributes or `<form>` in the widget
    - email gate hiding
 2. **Analytics:**
@@ -417,7 +435,10 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
    - "she's 9", "nine", "九" and "佢今年九" answer the age question
    - a typed age after games shown without an age joins the earlier question; a new question does not
    - Escape in a page field leaves the widget open with its draft; Escape on the page or in the widget closes it
-   - the CTA buttons use the site padding exactly
+10. **Look:** coral, gradient and border colours of every element at rest, hover, focus and pressed; 3px ink card borders; chips; teal-pale bubble; composer, header, grouping and scrollbar rules; first card fully visible at 375px.
+11. **Cards and hand-off:** the description area opens the game, "more" does not, one control and one event per card; host card click for paid (lock pop-up, no navigation) and free; /library without a host card; no ladderlessons.com address for a paid game; all on 127.0.0.1 and on app.ladderlessons.com.
+12. **Follow-ups** in English and Chinese, and the "nothing left" reply.
+13. **Screenshots** at 320, 375 and 1280px (empty, a reply with three cards, a follow-up, the text box focused).
 9. **Device and download:**
    - no `navigator.gpu`
    - phone and in-app user agents
@@ -428,7 +449,9 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 
 ### Before and after (E3)
 
-**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 38/122, after 122/122**. Full table: `tests/results/keyword-before-after.md`.
+**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 44/146, after 146/146**. Full table: `tests/results/keyword-before-after.md`.
+
+**AI mode, owner's run (2026-10-06, Mac, Apple GPU, Chrome 154, 122 questions):** before 34/122, after 119/122, 0 invalid replies or crashes in 94 model calls. The three failures (Number Ninja, Clinic Day, IELTS Speaking Room dropped or demoted by the model) are fixed by keeping the keyword answer's lead; the replay of those same 94 replies now passes 122/122. The 24 questions added since need a new run of `model-test.html` to have real model replies.
 
 **AI mode (needs a real GPU):**
 1. Start the server.
@@ -455,7 +478,8 @@ To see a true first visit (the download button with nothing cached), use the dem
 
 | Browser | AI or fallback | Tested? | Notes |
 |---|---|---|---|
-| Desktop Chrome / Edge (Windows, macOS, ChromeOS), recent version | **AI offered** on most GPUs | Not on real hardware. Offer, download, cancel and fallback tested with a simulated GPU | Needs WebGPU with `shader-f16` |
+| Desktop Chrome on macOS | **AI** | **Yes, on real hardware**: owner's Mac (Apple GPU, metal-3, 32 GB), Chrome 154. 94 model calls, 0 invalid | |
+| Desktop Chrome / Edge (Windows, ChromeOS), recent version | **AI offered** on most GPUs | Not on real hardware. Offer, download, cancel and fallback tested with a simulated GPU | Needs WebGPU with `shader-f16` |
 | Desktop Chrome on Linux | Usually **fallback** | No | WebGPU is often not enabled on Linux |
 | Desktop Safari | **AI** expected where Safari has WebGPU and the GPU reports `shader-f16`; older Safari **fallback** | No | |
 | Desktop Firefox | **Fallback** expected on most setups | No | I am not certain which versions expose `shader-f16`; check with `demo.html` › "Check this device" |
@@ -469,10 +493,13 @@ To see a true first visit (the download button with nothing cached), use the dem
 
 | Measure | Value |
 |---|---|
-| Page-load cost | 2 requests: `ll-assistant.js` 28 KB gzip + `ll-assistant.css` 3 KB gzip. Layout shift 0. **Measured** in headless Chromium |
-| Model download size | **Not measured yet.** `model-test.html` measures the real bytes in the cache |
-| Time to first answer on a mid-range laptop | **Not measured yet.** Needs a real GPU; run `model-test.html` |
-| Memory | ~945 MB GPU is **WebLLM's published estimate, not measured.** `model-test.html` says where to read the real figure |
+| Page-load cost | 2 requests: `ll-assistant.js` 32 KB gzip + `ll-assistant.css` 4 KB gzip. Layout shift 0. **Measured** in headless Chromium |
+| Model download size | **277 MB** (289,982,565 bytes), **measured** in the cache on the owner's Mac. Download time not measured (the model was already cached) |
+| Model start from cache | **985 ms**, measured, owner's Mac (Apple GPU, Chrome 154) |
+| Time to first answer | **641 ms**; median answer **495 ms**. Measured on the owner's Mac, not a mid-range laptop |
+| Page memory (JS heap) | **47 MB**, measured, owner's Mac |
+| GPU memory | ~945 MB is **WebLLM's published estimate, not measured** |
+| Model speed (tokens/sec) | The owner's run showed `NaN`: the worker reset the chat after each answer, which cleared WebLLM's counters. Fixed: it now averages the speed WebLLM reports with each answer. Needs a new run |
 
 ---
 
@@ -490,6 +517,8 @@ scripts/serve.mjs            local static server
 dist/ll-assistant/           ← deploy this folder
 demo.html, index.html        local test pages
 tests/                       questions, checker, unit, browser, compare, model-test, baseline (old code)
+tests/fixtures/              the real model's recorded replies, replayed by the unit tests
+tests/results/               before/after table and screenshots, written by npm test
 ```
 
 `dist/` is committed so the folder can be copied without running Node. After editing `src/`, `catalogue.json`, `ages.csv` or the CSV, run `npm run build` and commit `dist/` too.

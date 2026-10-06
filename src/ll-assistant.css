@@ -2,26 +2,24 @@
    Colours, radii, shadows and fonts are the site's own tokens (ll-tokens.css,
    copied from games/library.html). The widget reads them from the page's :root;
    each fallback below is the exact value from ll-tokens.css, so the widget still
-   looks right on a page without them. Only white is added, for cards (B4).
-   tests/unit.test.mjs fails if a colour or token name here is not in ll-tokens.css. */
+   looks right on a page without them. Only white is added.
+   Colour budget: ink, cream and white carry the widget. Colour appears only in
+   the plan label, the yellow focus ring, the teacher's teal-pale bubble and the
+   coral gradient of the one primary button (Find games).
+   tests/unit.test.mjs fails if a colour or token name here is not in ll-tokens.css,
+   or if coral is used on anything but the primary button. */
 #ll-assistant {
-  --ll-coral: var(--coral, #FF6B6B);
-  --ll-coral-dark: var(--coral-dark, #FF8E53);
-  --ll-coral-pale: var(--coral-pale, rgba(255,107,107,.12));
-  --ll-coral-ink: var(--coral-ink, #C9453F);
-  --ll-teal: var(--teal, #4ECDC4);
+  --ll-teal-pale: var(--teal-pale, rgba(78,205,196,.14));
   --ll-yellow: var(--yellow, #FFE66D);
   --ll-ink: var(--ink, #2C3E50);
   --ll-ink-soft: var(--ink-soft, #5A6C7D);
   --ll-cream: var(--cream, #FFF9F0);
-  --ll-cream-deep: var(--cream-deep, #F6EDE0);
   --ll-line: var(--line, #E5E7EB);
   --ll-muted: var(--muted, #9CA3AF);
   --ll-purple-1: var(--purple-1, #667EEA);
   --ll-tier-free: var(--tier-free, #F472B6);
   --ll-grad-cta: var(--grad-cta, linear-gradient(135deg,#FF6B6B 0%,#FF8E53 100%));
   --ll-r-rung: var(--r-rung, 12px);
-  --ll-r-sm: var(--r-sm, 8px);
   --ll-r-md: var(--r-md, 16px);
   --ll-r-pill: var(--r-pill, 9999px);
   --ll-sh-rung: var(--sh-rung, 0 4px 0 rgba(44,62,80,.14));
@@ -32,6 +30,8 @@
   /* What the teacher types uses system fonts only: a web font served in
      character ranges would fetch files based on the characters typed. */
   --ll-ff-typed: system-ui, -apple-system, 'Segoe UI', 'PingFang HK', 'Microsoft JhengHei', sans-serif;
+  /* Focus on every control: the ink border stays, a yellow ring is added (A5). */
+  --ll-ring: 0 0 0 4px var(--ll-yellow);
   --ll-x: 16px;
   --ll-y: 16px;
   font-family: var(--ll-ff-body);
@@ -42,29 +42,61 @@
 #ll-assistant[hidden] { display: none !important; }
 #ll-assistant *, #ll-assistant *::before, #ll-assistant *::after { box-sizing: border-box; }
 #ll-assistant button, #ll-assistant textarea { font: inherit; color: inherit; }
-#ll-assistant button:focus-visible { outline: 3px solid var(--ll-ink); outline-offset: 2px; }
-/* The text box is focused whenever the panel opens, so it only changes its border colour. */
-#ll-assistant .ll-input:focus { outline: none; border-color: var(--ll-coral-ink); }
+#ll-assistant button:focus { outline: none; }
+#ll-assistant button:focus-visible { outline: none; box-shadow: var(--ll-ring); }
+#ll-assistant .ll-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
 
-/* Site CTA (_brand/ll-funnel.css .llf__btn): coral gradient, ink text, ink border */
+/* The primary button (Find games): the only coral in the widget (A7), copied
+   from the site CTA _brand/ll-funnel.css .llf__btn, in a compact size (B2). */
 #ll-assistant .ll-cta {
-  min-height: 48px; cursor: pointer;
+  flex: 0 0 auto; min-height: 44px; cursor: pointer;
   font-family: var(--ll-ff-head); font-weight: 700; font-size: 16px; letter-spacing: .01em;
-  padding: 11px 26px; border: 3px solid var(--ll-ink); border-radius: var(--ll-r-pill);
+  padding: 8px 18px; border: 3px solid var(--ll-ink); border-radius: var(--ll-r-pill);
   background: var(--ll-grad-cta); color: var(--ll-ink); box-shadow: var(--ll-sh-rung);
   transition: transform .12s, box-shadow .12s;
 }
 #ll-assistant .ll-cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--ll-sh-lift); }
-#ll-assistant .ll-cta:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+#ll-assistant .ll-cta:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+#ll-assistant .ll-cta:focus-visible { box-shadow: var(--ll-ring); }
+/* Disabled: as on the site (B5) */
 #ll-assistant .ll-cta:disabled { background: var(--ll-line); color: var(--ll-ink-soft); border-color: var(--ll-muted); box-shadow: none; cursor: default; }
-#ll-assistant .ll-cta-block { display: block; width: 100%; margin: 0 0 6px; }
+
+/* Other buttons: white pill with the ink outline (launcher, download, cancel, close) */
+#ll-assistant .ll-btn, #ll-assistant .ll-close {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 2.5px solid var(--ll-ink); border-radius: var(--ll-r-pill);
+  background: #fff; color: var(--ll-ink); cursor: pointer;
+  font-family: var(--ll-ff-head); font-weight: 700;
+  transition: transform .12s, box-shadow .12s;
+}
+#ll-assistant .ll-btn { min-height: 44px; padding: 8px 20px; font-size: 15px; box-shadow: var(--ll-sh-rung); }
+#ll-assistant .ll-btn:hover:not(:disabled), #ll-assistant .ll-close:hover { transform: translateY(-2px); box-shadow: var(--ll-sh-rung); }
+#ll-assistant .ll-btn:active:not(:disabled), #ll-assistant .ll-close:active { transform: translateY(2px); box-shadow: none; }
+#ll-assistant .ll-btn:focus-visible, #ll-assistant .ll-close:focus-visible { box-shadow: var(--ll-ring); }
+#ll-assistant .ll-btn-block { display: flex; width: 100%; margin: 0 0 6px; }
+
+/* Quick-pick chips and numbered choices: the library .chip (A6) */
+#ll-assistant .ll-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 5px 14px; border-radius: var(--ll-r-pill);
+  border: 2.5px solid var(--ll-ink); background: #fff; color: var(--ll-ink); cursor: pointer;
+  font-family: var(--ll-ff-head); font-weight: 600; font-size: 14px; text-align: left;
+  transition: transform .12s, box-shadow .12s;
+}
+#ll-assistant .ll-chip:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--ll-sh-rung); }
+#ll-assistant .ll-chip:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+#ll-assistant .ll-chip:focus-visible { box-shadow: var(--ll-ring); }
+#ll-assistant .ll-chip:disabled { cursor: default; color: var(--ll-ink-soft); }
+#ll-assistant .ll-num { font-weight: 700; }
 
 /* Launcher */
 #ll-assistant .ll-launcher {
   position: absolute;
   bottom: calc(var(--ll-y) + env(safe-area-inset-bottom, 0px));
-  display: inline-flex; align-items: center; gap: 8px;
-  white-space: nowrap;
+  min-height: 48px; padding: 10px 22px; font-size: 16px; white-space: nowrap;
 }
 #ll-assistant.ll-pos-right .ll-launcher { right: var(--ll-x); }
 #ll-assistant.ll-pos-left .ll-launcher { left: var(--ll-x); }
@@ -87,29 +119,30 @@
 #ll-assistant.ll-pos-right .ll-panel { right: var(--ll-x); }
 #ll-assistant.ll-pos-left .ll-panel { left: var(--ll-x); }
 
-/* Header, privacy line, mode line, offer and input never shrink; only the conversation scrolls. */
-#ll-assistant .ll-head, #ll-assistant .ll-privacy, #ll-assistant .ll-modeline, #ll-assistant .ll-offer, #ll-assistant .ll-composer { flex: 0 0 auto; }
-#ll-assistant .ll-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 2px 16px; }
-#ll-assistant .ll-title { margin: 0; font-family: var(--ll-ff-head); font-size: 18px; font-weight: 600; }
+/* Header: title on one line, then the lock sentence; a line under it (C5).
+   Header, offer and composer never shrink; only the conversation scrolls. */
+#ll-assistant .ll-head, #ll-assistant .ll-privacy, #ll-assistant .ll-offer, #ll-assistant .ll-composer { flex: 0 0 auto; }
+#ll-assistant .ll-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 12px 2px 16px; }
+#ll-assistant .ll-title {
+  margin: 0; min-width: 0; font-family: var(--ll-ff-head); font-size: 18px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* Chinese headings: weight 700 and 0.02em (style guide §2). data-l="2" is Chinese. */
 #ll-assistant .ll-panel[data-l="2"] .ll-title,
 #ll-assistant .ll-panel[data-l="2"] .ll-offer-title,
 #ll-assistant .ll-panel[data-l="2"] .ll-card-title { font-weight: 700; letter-spacing: .02em; }
-#ll-assistant .ll-close {
-  width: 36px; height: 36px; border: 0; border-radius: var(--ll-r-pill);
-  background: transparent; font-size: 24px; line-height: 1; cursor: pointer; color: var(--ll-ink-soft);
-}
-#ll-assistant .ll-close:hover { background: var(--ll-cream-deep); }
+#ll-assistant .ll-close { flex: 0 0 auto; width: 36px; height: 36px; padding: 0; font-size: 22px; line-height: 1; }
 #ll-assistant .ll-privacy {
-  display: flex; align-items: flex-start; gap: 6px;
-  margin: 0 16px 2px; font-size: 13.5px; font-weight: 700; line-height: 1.35; color: var(--ll-ink);
+  display: flex; align-items: flex-start; gap: 6px; margin: 0;
+  padding: 0 16px 10px; border-bottom: 1px solid var(--ll-line);
+  font-size: 13px; font-weight: 400; line-height: 1.4; color: var(--ll-ink);
 }
+#ll-assistant .ll-privacy span { text-wrap: balance; }
 #ll-assistant .ll-lock { flex: 0 0 auto; margin-top: 2px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-#ll-assistant .ll-modeline { margin: 0 16px 8px 36px; font-size: 12.5px; line-height: 1.35; color: var(--ll-ink-soft); }
 
 /* AI offer */
 #ll-assistant .ll-offer {
-  margin: 0 12px 8px; padding: 12px; border-radius: var(--ll-r-rung);
+  margin: 10px 12px 0; padding: 12px; border-radius: var(--ll-r-rung);
   background: #fff; box-shadow: var(--ll-sh-card);
 }
 #ll-assistant .ll-offer[hidden] { display: none; }
@@ -117,58 +150,61 @@
 #ll-assistant .ll-offer-title { font-family: var(--ll-ff-head); font-weight: 600; }
 #ll-assistant .ll-offer-min { padding: 6px 12px; box-shadow: none; background: transparent; }
 #ll-assistant .ll-offer-min p { margin: 0; }
-#ll-assistant .ll-btn {
-  display: inline-block; min-height: 40px; padding: 8px 16px; margin: 0 0 6px;
-  border-radius: var(--ll-r-pill); border: 2px solid var(--ll-line); background: #fff;
-  font-family: var(--ll-ff-head); font-weight: 600; cursor: pointer;
-}
-#ll-assistant .ll-link { border: 0; background: none; padding: 4px 0; color: var(--ll-coral-ink); text-decoration: underline; cursor: pointer; font-size: 13px; }
+#ll-assistant .ll-link { border: 0; background: none; padding: 4px 0; color: var(--ll-ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 13px; }
 #ll-assistant .ll-small { font-size: 12.5px; color: var(--ll-ink-soft); }
 #ll-assistant .ll-progress-text { font-size: 13px; }
-/* Progress bar: 12px, teal fill on the line colour (style guide §3) */
+/* Progress bar: 12px (style guide §3), ink fill on the line colour (colour budget) */
 #ll-assistant .ll-bar { height: 12px; margin: 0 0 10px; border-radius: var(--ll-r-pill); background: var(--ll-line); overflow: hidden; }
-#ll-assistant .ll-bar span { display: block; height: 100%; width: 0; background: var(--ll-teal); transition: width .3s; }
+#ll-assistant .ll-bar span { display: block; height: 100%; width: 0; background: var(--ll-ink); transition: width .3s; }
 
-/* Conversation */
-#ll-assistant .ll-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 12px 8px; overscroll-behavior: contain; }
-#ll-assistant .ll-msg { margin: 8px 0; padding: 10px 12px; border-radius: var(--ll-r-rung); }
+/* Conversation. One group per teacher message and its reply: 8px inside,
+   24px and a line between groups (C1). Thin scrollbar (C6). */
+#ll-assistant .ll-log {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 12px 16px; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: var(--ll-line) transparent;
+}
+#ll-assistant .ll-log::-webkit-scrollbar { width: 6px; }
+#ll-assistant .ll-log::-webkit-scrollbar-track { background: transparent; }
+#ll-assistant .ll-log::-webkit-scrollbar-thumb { background: var(--ll-line); border-radius: var(--ll-r-pill); }
+#ll-assistant .ll-turn { display: flex; flex-direction: column; gap: 8px; }
+#ll-assistant .ll-turn + .ll-turn { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--ll-line); }
+#ll-assistant .ll-msg { margin: 0; border-radius: var(--ll-r-rung); }
 #ll-assistant .ll-msg p { margin: 0 0 6px; }
 #ll-assistant .ll-msg p:last-child { margin-bottom: 0; }
-#ll-assistant .ll-bot { background: transparent; padding-left: 0; padding-right: 0; }
+#ll-assistant .ll-bot { align-self: stretch; }
 #ll-assistant .ll-you {
-  margin-left: 15%; background: var(--ll-coral-pale); color: var(--ll-ink);
+  align-self: flex-end; max-width: 85%; padding: 10px 12px;
+  background: var(--ll-teal-pale); color: var(--ll-ink);
   font-family: var(--ll-ff-typed); white-space: pre-wrap; word-break: break-word;
 }
 #ll-assistant .ll-thinking { color: var(--ll-ink-soft); font-style: italic; }
-#ll-assistant .ll-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-#ll-assistant .ll-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  min-height: 34px; padding: 5px 12px; border-radius: var(--ll-r-pill);
-  border: 2px solid var(--ll-line); background: #fff; cursor: pointer; font-size: 13.5px; font-weight: 600; text-align: left;
-}
-#ll-assistant .ll-chip:hover:not(:disabled) { border-color: var(--ll-coral-ink); }
-#ll-assistant .ll-chip:disabled { cursor: default; color: var(--ll-ink-soft); }
-/* Number badge on numbered choices */
-#ll-assistant .ll-chip .ll-tag {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 20px; height: 20px; padding: 0 6px;
-  font-family: var(--ll-ff-head); font-weight: 600; color: var(--ll-ink);
-}
+#ll-assistant .ll-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+#ll-assistant .ll-foot { margin: 8px 2px 0; }
 
-/* Game cards: white, soft shadow, no outline (B4) */
-#ll-assistant .ll-cards { list-style: none; margin: 6px 0 0; padding: 0; }
-#ll-assistant .ll-card { margin: 0 0 10px; padding: 12px 14px; background: #fff; border-radius: var(--ll-r-rung); box-shadow: var(--ll-sh-card); }
-#ll-assistant .ll-card:last-child { margin-bottom: 0; }
-#ll-assistant .ll-cards > li.ll-small { margin: 4px 2px 10px; }
-#ll-assistant .ll-card-title {
-  display: inline; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
-  font-family: var(--ll-ff-head); font-size: 16px; font-weight: 600; color: var(--ll-coral-ink);
+/* Result cards: the library game card (A1); the whole card opens the game (A9) */
+#ll-assistant .ll-cards { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+#ll-assistant .ll-cards > li.ll-small { margin: 4px 2px 0; }
+#ll-assistant .ll-card {
+  position: relative; margin: 0; padding: 12px 14px;
+  background: #fff; border: 3px solid var(--ll-ink); border-radius: var(--ll-r-md); box-shadow: var(--ll-sh-rung);
+  transition: transform .12s, box-shadow .12s;
 }
-#ll-assistant button.ll-card-title:hover { text-decoration: underline; }
-#ll-assistant p.ll-card-title { margin: 0; color: var(--ll-ink); cursor: default; }
-#ll-assistant .ll-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; }
-#ll-assistant .ll-tag { font-size: 12px; padding: 1px 8px; border-radius: var(--ll-r-pill); background: var(--ll-cream-deep); color: var(--ll-ink-soft); }
-/* Plan labels: same as .tier on the library page. data-t: 1 free, 2 parent, 3 teacher. */
+#ll-assistant .ll-card:has(> button.ll-card-title) { cursor: pointer; }
+#ll-assistant .ll-card:has(> button.ll-card-title):hover,
+#ll-assistant .ll-card:has(> button.ll-card-title):focus-within { transform: translateY(-4px); box-shadow: var(--ll-sh-lift); outline: none; }
+/* Keyboard focus on the title draws the ring on the card, not on the text */
+#ll-assistant .ll-card:has(> button.ll-card-title:focus-visible) { box-shadow: var(--ll-sh-lift), var(--ll-ring); }
+#ll-assistant .ll-card-title {
+  display: inline; padding: 0; margin: 0; border: 0; background: none; text-align: left;
+  font-family: var(--ll-ff-head); font-size: 16px; font-weight: 600; color: var(--ll-ink); text-decoration: none;
+}
+#ll-assistant button.ll-card-title { cursor: pointer; }
+#ll-assistant button.ll-card-title::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+#ll-assistant button.ll-card-title:hover { text-decoration: underline; text-underline-offset: 3px; }
+#ll-assistant button.ll-card-title:focus-visible { box-shadow: none; }
+#ll-assistant p.ll-card-title { display: block; }
+/* Plan label: the only coloured pill (A8). Same as .tier on the library page. data-t: 1 free, 2 parent, 3 teacher. */
+#ll-assistant .ll-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0; font-size: 12.5px; color: var(--ll-ink-soft); }
 #ll-assistant .ll-tier {
   font-family: var(--ll-ff-head); font-weight: 600; font-size: 11px; letter-spacing: .04em;
   padding: 3px 10px; border-radius: var(--ll-r-pill); border: 2px solid var(--ll-ink); color: var(--ll-ink);
@@ -176,25 +212,44 @@
 #ll-assistant .ll-tier[data-t="1"] { background: var(--ll-tier-free); border-color: var(--ll-ink); }
 #ll-assistant .ll-tier[data-t="2"] { background: var(--ll-yellow); }
 #ll-assistant .ll-tier[data-t="3"] { background: var(--ll-purple-1); border-color: var(--ll-purple-1); }
-#ll-assistant .ll-desc {
-  font-size: 13.5px; color: var(--ll-ink-soft); margin: 0;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+#ll-assistant .ll-plan { margin: -2px 0 6px; font-size: 12px; }
+/* Description: three lines, then "more" (C7). No ellipsis. */
+#ll-assistant .ll-desc { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ll-ink-soft); max-height: calc(1.45em * 3); overflow: hidden; }
+#ll-assistant .ll-desc.ll-open { max-height: none; }
+#ll-assistant .ll-more {
+  position: relative; z-index: 1; display: inline-block; margin: 2px 0 0; padding: 2px 0;
+  border: 0; background: none; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--ll-ink);
+  text-decoration: underline; text-underline-offset: 3px;
 }
 #ll-assistant .ll-how { font-size: 13.5px; margin: 6px 0 0; }
-/* Level buttons on the Ladder Vocabulary card */
-#ll-assistant .ll-card .ll-chip { font-family: var(--ll-ff-head); color: var(--ll-coral-ink); padding: 4px 14px; }
+/* Level buttons on the Ladder Vocabulary card sit above nothing: that card has no single game */
+#ll-assistant .ll-card .ll-chips { margin-top: 6px; }
 
-/* Input */
-#ll-assistant .ll-composer { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 12px; border-top: 1px solid var(--ll-line); }
-#ll-assistant .ll-input {
-  flex: 1 1 auto; min-width: 0; min-height: 48px; max-height: 120px; resize: none;
-  padding: 11px 12px; border: 2px solid var(--ll-ink-soft); border-radius: var(--ll-r-rung); background: #fff;
-  font-family: var(--ll-ff-typed);
-  font-size: 16px; /* 16px stops iOS zooming in */
+/* Composer: one white box with the ink outline; text box and button inside (B1-B3) */
+#ll-assistant .ll-composer {
+  display: flex; align-items: flex-end; gap: 8px; margin: 8px 12px 12px; padding: 3px 3px 3px 14px;
+  background: #fff; border: 2.5px solid var(--ll-ink); border-radius: var(--ll-r-md);
 }
-#ll-assistant .ll-send { flex: 0 0 auto; }
+#ll-assistant .ll-composer:has(.ll-input:focus-visible) { box-shadow: var(--ll-ring); }
+#ll-assistant .ll-input {
+  flex: 1 1 auto; min-width: 0; margin: 0; padding: 11px 0; resize: none; overflow-y: auto;
+  border: 0; border-radius: 0; background: transparent; color: var(--ll-ink); outline: none;
+  font-family: var(--ll-ff-typed); line-height: 1.4;
+  font-size: 16px; /* 16px stops iOS zooming in */
+  field-sizing: content;
+  min-height: calc(1.4em + 22px); max-height: calc(1.4em * 4 + 22px); /* one line, up to four */
+}
+#ll-assistant .ll-input:focus, #ll-assistant .ll-input:focus-visible { outline: none; box-shadow: none; }
+
+/* 320px phones: room for the whole placeholder on one line (B4) */
+@media (max-width: 360px) {
+  #ll-assistant .ll-composer { gap: 6px; margin: 8px 8px 10px; padding-left: 10px; }
+  #ll-assistant .ll-cta { padding: 8px 12px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  #ll-assistant .ll-bar span, #ll-assistant .ll-cta { transition: none; }
-  #ll-assistant .ll-cta:hover:not(:disabled), #ll-assistant .ll-cta:active:not(:disabled) { transform: none; }
+  #ll-assistant .ll-bar span, #ll-assistant .ll-cta, #ll-assistant .ll-btn, #ll-assistant .ll-chip, #ll-assistant .ll-card, #ll-assistant .ll-close { transition: none; }
+  #ll-assistant .ll-cta:hover:not(:disabled), #ll-assistant .ll-cta:active:not(:disabled),
+  #ll-assistant .ll-btn:hover:not(:disabled), #ll-assistant .ll-chip:hover:not(:disabled),
+  #ll-assistant .ll-card:hover, #ll-assistant .ll-card:focus-within { transform: none; }
 }
