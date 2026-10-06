@@ -103,7 +103,7 @@
       noSkillLevel: '暫時未有啱呢個程度嘅{skill}遊戲。',
       tryThese: '可以試吓：',
       kidNote: '暫時未有為青少年或成人而設嘅{skill}遊戲，以下係兒童主題：',
-      skills: { speaking: '口語', writing: '寫作', grammar: '文法', vocab: '詞彙', phonics: '拼讀', listening: '聽力' },
+      skills: { speaking: '口說', writing: '寫作', grammar: '文法', vocab: '詞彙', phonics: '拼讀', listening: '聽力' },
       tier: { free: '免費', parent: '家長版', teacher: '老師版' },
       mode: { led: '老師帶領', solo: '學生自己玩' },
       level: '程度 {l}',
@@ -145,6 +145,8 @@
   // A message made only of these plus an age asks for the skill (A5).
   var TEACH_EN = toSet('student students pupil pupils learner learners kid kids child children son daughter boy boys girl girls class classes group lesson lessons beginner beginners total complete absolute level levels hong kong hk local international school primary secondary sec form year grade age aged old years yo teach teaching tutor tutoring private one new adult adults teen teens teenage teenager teenagers preschool kindergarten nursery online english esl elementary intermediate advanced upper pre zero mine idea ideas suggestion suggestions suggest recommend recommendation recommendations something anything help practice practise extra fun play stuff she he her his him years-old got use using tomorrow today tonight week weekend weekday monday tuesday wednesday thursday friday saturday sunday session sessions thanks thank hi hello lol'.split(' ').map(norm));
   var TEACH_ZH = ['國際學校', '請問', '適合', '聽日', '今日', '明日', '明天', '今天', '星期', '禮拜', '今個', '下個', '週末', '周末', '今年', '小朋友', '零基礎', '青少年', '幼稚園', '一對一', '學生', '細路', '兒子', '女兒', '初學', '初級', '程度', '香港', '本地', '學校', '成人', '大人', '中學', '小學', '新手', '入門', '啱啱', '開始', '補習', '英文', '上堂', '課堂', '我哋', '佢哋', '遊戲', '建議', '推介', '介紹', '有冇', '有無', '練習', '而家', '依家', '讀緊', '讀書', '返學', '上學', '好玩', '可以', '邊啲', '什麼', '甚麼', '我', '佢', '嘅', '個', '有', '一', '班', '堂', '仔', '女', '學', '教', '的', '是', '係', '讀', '生', '位', '名', '同', '和', '咗', '緊', '剛', '歲', '咩', '乜', '啲', '俾', '畀', '玩', '想', '嗎', '呢', '吖', '啊', '呀', '喎', '嘛', '半', '新', '好', '用', '喺', '在'];
+
+  var ZH_SAME = [['口說', '口語']];
 
   // Teacher words that point to a skill (catalogue category id).
   var SKILL_WORDS = {
@@ -410,6 +412,11 @@
       for (var j = 0; j < zh.length; j++) if (raw.indexOf(zh[j]) >= 0) { hit = true; zhSkillWords.push(zh[j]); }
       if (hit) skills.push(id);
     });
+    // 口說 (the site's tag) and 口語 (common usage) are one word: the catalogue
+    // uses both, so either one matches games tagged with the other.
+    ZH_SAME.forEach(function (pair) {
+      if (zhSkillWords.indexOf(pair[0]) >= 0 || zhSkillWords.indexOf(pair[1]) >= 0) pair.forEach(function (w) { if (zhSkillWords.indexOf(w) < 0) zhSkillWords.push(w); });
+    });
     // A head-count ("6 students") is read after school years are taken out, so
     // "Form 4 students" is a school year, not a group of four.
     if (/\bgroup of\b|\bclass of\b|\bwhole class\b|\d+\s*(?:students|kids|learners|children)\b|\d+\s*個(?:學生|小朋友|細路)/i.test(work) && skills.indexOf('group') < 0) skills.push('group');
@@ -586,6 +593,12 @@
         .map(function (it, i) { return { it: it, i: i }; })
         .sort(function (a, b) { return maxAgeMin(b.it) - maxAgeMin(a.it) || a.i - b.i; })
         .map(function (x) { x.it.kid = true; return x.it; });
+      // The note explains kid-themed games of a skill that has nothing for
+      // older learners, even when a game of another skill is shown first.
+      if (kids.length) {
+        var noteSkill = byId[itemIds(kids[0])[0]].skill;
+        kidNote = !ctx.eligible.some(function (g) { return g.skill === noteSkill && !g.kid; });
+      }
       if (!non.length && kids.length) {
         // No game for older learners in this skill: the best other game goes
         // first, then a note, then the kid-themed games.

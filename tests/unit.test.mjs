@@ -255,6 +255,15 @@ test('privacy lines and plan labels are exactly as approved', () => {
   assert.deepEqual(core.T.zh.tier, { free: '免費', parent: '家長版', teacher: '老師版' });
 });
 
+test('skill choice labels use the site\'s skill tag words (口說, not 口語)', () => {
+  for (const c of source.categories.filter((c) => core.SIX.includes(c.id))) {
+    assert.equal(core.T.zh.skills[c.id], c.zh, c.id);
+    assert.equal(core.T.en.skills[c.id], c.en, c.id);
+  }
+  assert.equal(core.T.zh.skills.speaking, '口說');
+  assert.deepEqual(core.parseQuery('8歲 口語').skills, ['speaking'], 'a teacher who types 口語 still means speaking');
+});
+
 test('no security or certification wording, and the widget never asks for a name (D4)', () => {
   const all = JSON.stringify(core.T);
   assert.doesNotMatch(all, /secur|certif|encrypt|\bsafe\b|guarantee|安全|認證|加密|保證/i);

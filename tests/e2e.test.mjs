@@ -392,7 +392,7 @@ test('C1: one language per conversation; a switch redraws earlier answers; "2" k
   assert.equal(r.turn.askType, 'skill');
   assert.equal(await page.locator('#ll-assistant .ll-card .ll-tier').first().innerText(), '家長版', 'earlier card redrawn in Chinese');
   assert.equal(await page.locator('#ll-assistant .ll-title').innerText(), '課堂遊戲小助手');
-  assert.match(await lastBot(page).innerText(), /1\s*口語[\s\S]*2\s*寫作[\s\S]*6\s*聽力/);
+  assert.match(await lastBot(page).innerText(), /1\s*口說[\s\S]*2\s*寫作[\s\S]*6\s*聽力/);
   const r2 = await ask(page, '2');
   assert.equal(await page.locator('#ll-assistant .ll-title').innerText(), '課堂遊戲小助手', '"2" keeps Chinese');
   assert.equal(r2.turn.kind, 'picks');

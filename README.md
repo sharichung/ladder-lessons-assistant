@@ -177,7 +177,7 @@ This applies in both modes. In AI mode, if the model leaves it out, the widget p
 **Ladder Vocabulary** takes one card, with a button for each level that fits the age and any stated level. For example, a P5 student gets A1 · A2 · B1, and "A2" gives only A2.
 
 **When the widget asks instead of answering:**
-- **An age, grade or level with no skill** ("Form 4 student", "Form 4 students", "中四生", "Any ideas for a Form 4 student?", "Got anything for a 10 year old?", "請問有冇適合K2嘅遊戲？", "我聽日教個小三學生，有咩好玩？", "Adult, B2", "6歲 beginner"): one question, "Which skill?", with numbered choices 1) Speaking 2) Writing 3) Grammar 4) Vocabulary 5) Phonics 6) Listening, or 1) 口語 2) 寫作 3) 文法 4) 詞彙 5) 拼讀 6) 聽力 in Chinese. This happens only when the rest of the message is teaching words. "My 8 year old wants a pizza recipe" still gets the off-topic reply.
+- **An age, grade or level with no skill** ("Form 4 student", "Form 4 students", "中四生", "Any ideas for a Form 4 student?", "Got anything for a 10 year old?", "請問有冇適合K2嘅遊戲？", "我聽日教個小三學生，有咩好玩？", "Adult, B2", "6歲 beginner"): one question, "Which skill?", with numbered choices 1) Speaking 2) Writing 3) Grammar 4) Vocabulary 5) Phonics 6) Listening, or 1) 口說 2) 寫作 3) 文法 4) 詞彙 5) 拼讀 6) 聽力 in Chinese, the same words as the site's skill tags. This happens only when the rest of the message is teaching words. "My 8 year old wants a pizza recipe" still gets the off-topic reply.
 - **Reading** (reading, 閱讀, 睇書, 看書; 讀書 about going to school, as in "喺國際學校讀書", does not count):
   - Under 8, reading means phonics.
   - From 8, the widget says there is no reading game yet and offers 1) Vocabulary 2) Grammar 3) Listening.

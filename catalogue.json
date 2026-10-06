@@ -1,8 +1,8 @@
 {
   "_meta": {
     "source": "games/library.html GAMES array (single source of truth)",
-    "generated": "2026-10-05",
-    "count": 66,
+    "generated": "2026-10-06",
+    "count": 67,
     "tier_values": {
       "free": "Free, no account needed",
       "parent": "Paid: Parent plan and above",
@@ -575,7 +575,7 @@
       "mode": "led",
       "description_en": "Seven answer frames, four of them original to Ladder Lessons, with 221 questions for interviews, opinions and debate. A stopwatch shows the target length, so students learn what a full answer sounds like",
       "description_zh": "七個答題框架，其中四個係 Ladder Lessons 原創，配 221 條面試、意見、辯論題。正數計時顯示目標長度，學生知道一個完整答案有幾長",
-      "keywords": "升中面試 interview 面試 口語 speaking 框架 framework OREO HW3YC STAR PPYSH PMO SYS OTAG 演講 presentation 意見 opinion 正反 睇圖 picture 工作面試 job 模擬聯合國 MUN",
+      "keywords": "升中面試 interview 面試 口語 speaking 框架 framework OREO HW3YC STAR PPYSH PMO SYS OTAG 演講 presentation 意見 opinion 正反 睇圖 picture 工作面試 job 求職 work 職場 模擬聯合國 MUN",
       "in_public_build": false
     },
     {
@@ -590,7 +590,22 @@
       "mode": "led",
       "description_en": "The adult speaking board for 1-to-1 lessons. Each student gets their own board of topic words, discussion questions and role-plays, and it remembers where they stopped, so the next lesson starts with Continue",
       "description_zh": "成人 1 對 1 口語上堂板。每個學生一個 board：主題生字、討論題、生活 role-play。自動記住上次去到邊，下一堂一撳 Continue",
-      "keywords": "成人 adult 口語 speaking conversation 會話 small talk 日常 daily IELTS 雅思 生字 vocabulary phrases 形容詞 adjective sticky Miro 白板 board 進度 progress lesson note 課堂記錄 OREO frame 錄音 record role-play 角色扮演 旅行 travel",
+      "keywords": "成人 adult 口語 speaking conversation 會話 small talk 日常 daily IELTS 雅思 生字 vocabulary phrases 形容詞 adjective sticky Miro 白板 board 進度 progress lesson note 課堂記錄 OREO frame 錄音 record role-play 角色扮演 旅行 travel business 商業 商務 work 工作 上班族 職場 workplace meeting 會議 negotiating 談判 networking job interview 工作面試 phone call video call customer service office teens 青少年 中學生 school life exams",
+      "in_public_build": false
+    },
+    {
+      "id": "speaking_IntroBuilder",
+      "title": "Intro Builder",
+      "url": "https://ladderlessons.com/speaking/speaking_IntroBuilder",
+      "category": "speaking",
+      "category_en": "Speaking",
+      "category_zh": "口說",
+      "tier": "teacher",
+      "free": false,
+      "mode": "led",
+      "description_en": "Build a self-introduction with a student on memo notes, for young learners, school interviews and job interviews. Each student's board is saved, and you share it as a picture for practice after class",
+      "description_zh": "同學生一齊將自我介紹砌成 memo 紙重點，分幼童、升中面試、工作面試三個模板。每個學生一塊 board 自動儲存，一撳出圖 send 畀學生課後練",
+      "keywords": "自我介紹 self introduction intro 升中面試 school interview 工作面試 job interview memo 便利貼 sticky notes 關鍵字 key words STAR 分享 圖片 picture 儲存 save 口語 speaking",
       "in_public_build": false
     },
     {
