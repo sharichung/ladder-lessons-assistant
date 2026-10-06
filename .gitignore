@@ -1,1 +1,5 @@
 node_modules/
+
+# Screenshots written by npm test (E5) and for review; regenerated every run
+tests/results/screenshots/
+tests/results/screenshots-hd/
