@@ -150,14 +150,24 @@
       var kwB = normaliseV1(V1.recommendRules(catV1, q.text));
       var kwRun = await runQ(core, q, function (text, opts) { return core.recommendRules(cat, text, opts); });
       var kwA = kwRun.res;
-      var aiShown = [];
-      var after = await aiRun(function () { return runQ(core, q, function (text, opts) { return core.recommendAI(cat, client, text, Object.assign({ timeoutMs: 60000 }, opts)); }).then(function (x) { aiShown = x.shown; return x.res; }); });
+      // Every model call in the conversation counts (a follow-up's first message too), each timed on its own.
+      var aiShown = [], each = [];
+      var after = await aiRun(function () {
+        return runQ(core, q, function (text, opts) {
+          var t0 = performance.now();
+          return core.recommendAI(cat, client, text, Object.assign({ timeoutMs: 60000 }, opts)).then(function (r) { each.push({ r: r, ms: Math.round(performance.now() - t0) }); return r; });
+        }).then(function (x) { aiShown = x.shown; return x.res; });
+      });
       var aiA = after.r || kwA;
       var before = await aiRun(function () { return V1.recommendAI(catV1, client, q.text, { timeoutMs: 60000 }); });
       var aiB = before.r ? normaliseV1(before.r) : normaliseV1(V1.recommendRules(catV1, q.text));
-      var reachedModel = aiA.raw !== undefined || after.crash;
-      if (reachedModel) { calls++; times.push(after.ms); if (firstMs === null) firstMs = after.ms; }
-      if (after.crash || aiA.modelInvalid) invalid++;
+      var reachedModel = each.some(function (x) { return x.r.raw !== undefined; }) || after.crash;
+      each.forEach(function (x) {
+        if (x.r.raw === undefined) return;
+        calls++; times.push(x.ms); if (firstMs === null) firstMs = x.ms;
+        if (x.r.modelInvalid) invalid++;
+      });
+      if (after.crash) { calls++; invalid++; }
       var c = { kwBefore: check(q, kwB, cat), kwAfter: check(q, kwA, cat, kwRun.shown), aiBefore: check(q, aiB, cat), aiAfter: check(q, aiA, cat, aiShown) };
       Object.keys(c).forEach(function (k) { if (c[k].ok) pass[k]++; });
       var rec = {

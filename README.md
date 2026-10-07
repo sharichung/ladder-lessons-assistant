@@ -60,7 +60,7 @@ Then add one line before `</body>` on the pages where teachers should see it:
 <script src="/ll-assistant/ll-assistant.js" defer data-avoid="#your-email-gate, #your-lock-popup"></script>
 ```
 
-- Replace `#your-email-gate` with the CSS selector of the email gate, and `#your-lock-popup` with the selector of the library's lock pop-up (the plan pop-up a locked game opens). The widget hides itself while any element matching these selectors is visible, so the pop-up is never behind the widget. You can list several, separated by commas.
+- Replace `#your-email-gate` with the CSS selector of the email gate, and `#your-lock-popup` with the selector of the library's lock pop-up (the plan pop-up a locked game opens). The widget hides itself while any element matching these selectors is visible, so the pop-up is never behind the widget, and comes back when it closes, also after a fade-out. You can list several, separated by commas.
 - **Put it on library and browse pages, not on game pages.** Teachers share the game page on screen, and the button would be visible to students.
 - The folder must be on the same domain as the page, because browsers only start Web Workers from the same origin.
 
@@ -174,7 +174,7 @@ Exception: when the teacher states an age under 13, "business" and "work" do not
 - 口說 (the site's tag) and 口語 (what many teachers type) are the same word. The catalogue uses both, so either one matches games tagged with the other, and the answer does not depend on which is typed.
 - School years in a game's keywords (P4, 小四, 中一, 中學) count only a little and never as the topic: the age filter already uses them. So "中一 商業英文" gets Ladder Talk, not Ladder Vocabulary.
 - "group work", "work on", "worksheet" and 工作紙 are not the topic "work".
-- **One keyword match is enough** when the message has a teaching word (English, 英文, lesson, class, practise, 練…) and nothing else but filler: "English for work" and 職場英文 give Ladder Talk and Ladder Frames; "我學生 6 歲，想練自我介紹" gives Intro Builder. Anything else needs a stronger match.
+- **One keyword match is enough** when the message mentions English or teaching (English, ESL, teach, tutor, 英文, 英語, 教, 補習, 練) or a learner (an age, a level, "adult", 學生…) and nothing else but filler: "English for work" and 職場英文 give Ladder Talk and Ladder Frames; "我學生 6 歲，想練自我介紹" gives Intro Builder. "class", "lesson" or "practice" alone are not enough, so "Where is my cooking class?" stays off-topic. Anything else needs a stronger match.
 - **No sign of a lesson, no games.** A message with no skill, age, level, lesson length, learner word or teaching word gets the off-topic reply, whatever keywords it hits. So "Book a meeting room in the office for Monday" stays off-topic although Ladder Talk has the keywords meeting and office. Of 132 off-topic test messages, 3 now get games, all with an adult word ("My adult son works in an office now"); 9 that used to get games no longer do.
 
 **Free game first.** A free game goes first when all of these hold:
@@ -202,7 +202,12 @@ This applies in both modes. In AI mode, if the model leaves it out, the widget p
 
 Today: "adult business english" and "商務英文 上班族" give **Ladder Talk**, the note, then Mini Business Tycoon Super and Young Entrepreneur. "English for work" and 職場英文 give Ladder Talk and Ladder Frames. Ladder Frames matches work, job, 求職 and 職場, but not "business" (its keywords don't have it).
 
-**Follow-ups** ("any other recommendations", "more", "another one", "something else", 還有其他推薦嗎, 仲有冇, 其他, 悶), with no new age, level or skill: the previous question again, without any game already shown in this conversation. When nothing is left, the widget says "No more games fit that. Try another skill:" with numbered skill choices. A follow-up is never answered with "could not match"; as a first message it gets "Which skill?".
+**Follow-ups** ("any other recommendations", "more", "another one", "something else", "Is there anything else?", "something new", 還有其他推薦嗎, 仲有冇, 其他, 更多, 有冇第二個, 悶…), with no new age, level or skill: the previous question again, without any game already shown in this conversation.
+- A new lesson length may come with it ("another one for 20 minutes", 仲有冇其他 20分鐘) and is used.
+- When nothing is left, the widget says "No more games fit that. Try another skill:" with numbered choices of the skills that still have games for this learner. Picking one shows that skill's games, still without repeats. If no skill is left either: "No more games fit that yet."
+- After a question from the widget ("Which skill?") a follow-up asks it again; after "no game for this age" it says nothing is left. It never goes back to an older question.
+- A follow-up is never answered with "could not match"; as a first message it gets "Which skill?".
+- Not follow-ups: "No more, thanks", "Thanks again", "hello again", "next week" (the off-topic reply, as before).
 
 **Short answers join the previous question.** A digit, a chip, or a reply that only gives an age ("she's 9", "9", "nine", "九", "佢今年九") or only gives a skill is added to the earlier question. A new full question starts fresh.
 - Games shown without an age come with the age buttons. Typing an age instead ("7", "she's 7", "7歲") also joins the earlier question. A reply with its own topic ("我學生 6 歲，想練自我介紹") is a new question.
@@ -213,7 +218,7 @@ Today: "adult business english" and "商務英文 上班族" give **Ladder Talk*
 2. The best 12 games that pass the filters go to the model as candidates. Each candidate carries `age_min`, its level range and `kid_theme`, but no URL or price.
 3. WebLLM's grammar engine forces a JSON reply: `{"picks": [...]}` using candidate ids only, as many as the lesson length allows. It can reply `{"ask": "..."}` only when the teacher gave neither age nor level.
 4. The widget then validates the picks and applies the same post-processing as keyword mode, in this order:
-   - **the keyword answer's lead stays first**: its first card, and its best keyword match when a free game went in front of it. The model fills the other places but cannot drop or demote them. (This fixed the three AI failures in the owner's run: Number Ninja, Clinic Day and IELTS Speaking Room, and Ladder Talk for "adult business english".)
+   - **the keyword answer's lead stays first**: its first card (whatever it matched by), and its best keyword match when a free game went in front of it. The model fills the other places but cannot drop or demote them. (This fixed the three AI failures in the owner's run: Number Ninja, Clinic Day and IELTS Speaking Room, and Ladder Talk for "adult business english".)
    - hard filters
    - top up: never fewer cards than the keyword answer ("Year 5 口說" gives three even when the model returns one)
    - kid-themed games down
@@ -248,6 +253,7 @@ No border is ever coral or red, in any state. Tests check every element's comput
 - **Result cards** copy the library game card: white, 3px ink border, `--r-md`, `--sh-rung`; they lift on hover and keyboard focus. The title is ink (Fredoka 600) with ↗, underlined on hover. Under it: the plan label and one plain `--ink-soft` line, for example "Speaking · Teacher-led · Level A2 · Kid-themed". Paid cards add "Opens the plan details" / 「會開啟方案詳情」. Descriptions show three lines, then a "more" toggle, never an ellipsis.
 - **The whole card opens the game.** The title stays the single button; its click area is stretched over the card, so there is one tab stop per card (plus "more"), the screen reader name is the game title, and the focus ring is drawn on the card. "more" sits above the click area and never opens the game.
 - **Buttons and chips:** white pills with an ink outline. Chips copy the library `.chip` (2.5px ink, Fredoka 600; lift and `--sh-rung` on hover). The launcher, Download and Cancel buttons are the same white pill with `--sh-rung`.
+- **AI offer:** once the first message is sent without a choice, it shrinks to one line ("Use on-device AI (… MB)"), so the answers keep the room; that line opens it again.
 - **Composer:** one white box with a 2.5px ink border; the text box (no border of its own) and the Find games button sit inside it, the button centred on one line and bottom-aligned when the text grows. The text box starts at one line and grows to four. Placeholder "Age, level, skill" / 「年齡、程度、技能」 (fits at 320px). Its own label, "Describe your student", is visually hidden. The focus ring is on the box.
 - **Conversation:** each teacher message and its reply form one group: 8px inside, 24px and a 1px line between groups; cards 8px apart. The intro and example chips are the empty state only. Thin scrollbar.
 - **Progress bar:** 12px, ink on the line colour (teal is outside the colour budget).
@@ -301,7 +307,8 @@ No border is ever coral or red, in any state. Tests check every element's comput
 **Microsoft Clarity (decision 7B: keep recording, remove every clue):**
 - The widget's root has `data-clarity-mask="true"`, so Clarity hides all text inside it. Clarity only checks that this attribute is present; the value doesn't matter.
 - Typing events stop at the widget, before Clarity's listeners or any other page script: input, change, all key events, the browser's before-input and text-input events, Chinese input-method events, text selection in the text box, and cut, copy and paste. This matters because without it, Clarity uploads an encoded fingerprint (a hash) of the typed text when the text box loses focus. The browser tests run the real Clarity library to confirm the fingerprint no longer appears.
-- Games open from buttons, not links, so Clarity's click records carry no game address. (In pause mode the library's lock pop-up appears while Clarity is still paused, because the widget is open.)
+- Games open from buttons, not links, so the widget's own click records carry no game address.
+- **But on the library page the widget clicks the library's own card** (see "Opening a game" above), and Clarity records that click like any click on the card: with the card's text (the game title) and its link (the game path). This happens in mask mode and also in pause mode, because Clarity's pause only holds back processing; it still records clicks on the page outside the widget, including the library's lock pop-up. So Clarity can see which game was opened from the widget on the library page, still nothing the teacher typed.
 - The widget's page code holds no game ids, sources or `lang` attributes. Plan colours come from a one-character code (`data-t="1|2|3"`), and class names never name a game, plan, skill or language.
 - Class names are the same for every kind of answer.
 - **What Clarity still records:**
@@ -316,9 +323,9 @@ No border is ever coral or red, in any state. Tests check every element's comput
   - Every mouse, pointer, touch, scroll, focus, drag, click and text-selection event inside the widget also stops before Clarity's listeners. The buttons still work, because the widget runs them itself.
   - On close, any text selected inside the widget is deselected before Clarity resumes.
   - On close, the conversation is cleared from the page and kept in memory. An answer that finishes after close is not drawn until the widget reopens. The send button and labels reset to the page's language before Clarity resumes.
-  - Clarity then sees nothing from the open widget except that the launcher was clicked.
+  - Clarity then sees nothing inside the open widget except that the launcher was clicked. Clicks the widget hands to the library's cards are page clicks and are still recorded (see above).
 - **After deploying, check both GA4 and Clarity:**
-  - **Clarity:** open the widget in an incognito window, type a message and click a game. Find that session in Clarity and confirm the widget area shows masked blocks only, with no game addresses.
+  - **Clarity:** open the widget in an incognito window, type a message and click a game. Find that session in Clarity and confirm the widget area shows masked blocks only, with no typed text. On the library page the click on the library card shows the game title and path, as described above.
   - **GA4:** in DebugView, confirm a game click shows only `ll_game_click`, with no automatic `click` event carrying a `link_url`.
 - **Google Fonts:** the site loads Noto Sans HK from Google Fonts in character ranges, and the browser fetches only the ranges for characters on screen.
   - When the widget shows Chinese labels, game titles or descriptions, Google can see which character ranges were needed. That roughly reflects which games were shown.
@@ -367,7 +374,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 **Chromium:** `npm test` uses `$CHROME_PATH` if set, otherwise installed Google Chrome.
 
 **The question set:**
-- `tests/questions.json` has 147 fixed questions in English and Chinese. They cover every failing case from the test round plus every review round's edge cases:
+- `tests/questions.json` has 160 fixed questions in English and Chinese. They cover every failing case from the test round plus every review round's edge cases:
   - kids, adults, IELTS, DSE and Form 4
   - phonics, reading and vocabulary levels
   - lesson lengths, in digits and in words
@@ -437,7 +444,8 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
    - Escape in a page field leaves the widget open with its draft; Escape on the page or in the widget closes it
 10. **Look:** coral, gradient and border colours of every element at rest, hover, focus and pressed; 3px ink card borders; chips; teal-pale bubble; composer, header, grouping and scrollbar rules; first card fully visible at 375px.
 11. **Cards and hand-off:** the description area opens the game, "more" does not, one control and one event per card; host card click for paid (lock pop-up, no navigation) and free; /library without a host card; no ladderlessons.com address for a paid game; all on 127.0.0.1 and on app.ladderlessons.com.
-12. **Follow-ups** in English and Chinese, and the "nothing left" reply.
+12. **Follow-ups** in English and Chinese, the "nothing left" reply, a skill picked after it, a follow-up after the widget's own question, and "no skill left".
+14. **Fourth review round:** the yellow ring while the pointer is over a button or chip, card titles Fredoka 600 in Chinese, the Ladder Vocabulary card lifts, the AI offer shrinks after the first message so the first card stays in view, descriptions measured again after a rotation, and a lock pop-up that fades out does not leave the widget hidden.
 13. **Screenshots** at 320, 375 and 1280px (empty, a reply with three cards, a follow-up, the text box focused).
 9. **Device and download:**
    - no `navigator.gpu`
@@ -449,7 +457,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 
 ### Before and after (E3)
 
-**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 44/146, after 146/146**. Full table: `tests/results/keyword-before-after.md`.
+**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 49/159, after 159/159**. Full table: `tests/results/keyword-before-after.md`.
 
 **AI mode, owner's run (2026-10-06, Mac, Apple GPU, Chrome 154, 122 questions):** before 34/122, after 119/122, 0 invalid replies or crashes in 94 model calls. The three failures (Number Ninja, Clinic Day, IELTS Speaking Room dropped or demoted by the model) are fixed by keeping the keyword answer's lead; the replay of those same 94 replies now passes 122/122. The 24 questions added since need a new run of `model-test.html` to have real model replies.
 

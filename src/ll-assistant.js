@@ -53,6 +53,7 @@
       inputLabel: 'Describe your student',
       planNote: 'Opens the plan details',
       noMore: 'No more games fit that. Try another skill:',
+      noMoreNone: 'No more games fit that yet.',
       send: 'Find games',
       thinking: 'Thinking…',
       picksIntro: 'Try these:',
@@ -99,6 +100,7 @@
       inputLabel: '描述你嘅學生',
       planNote: '會開啟方案詳情',
       noMore: '冇其他合適嘅遊戲喇。可以試吓其他技能：',
+      noMoreNone: '暫時冇其他合適嘅遊戲。',
       send: '搵遊戲',
       thinking: '諗緊…',
       picksIntro: '可以試吓：',
@@ -773,22 +775,33 @@
     if (!q.rest.length && !zhTopic) return false;
     TEACH_ZH.forEach(function (w) { left = left.split(w).join(' '); });
     if (left.replace(/[一二兩三四五六七八九十年]/g, ' ').match(CJK_ALL)) return false;
-    return TEACHING_CONTEXT.test(q.low);
+    return ONE_KEYWORD_CONTEXT.test(q.low) || q.hasAge || q.hasLevel || audienceWord(q);
+  }
+  // "cooking class" or "Where is my cooking class?" is not enough: the one-keyword
+  // rule needs English, teaching or a learner.
+  var ONE_KEYWORD_CONTEXT = /\b(?:english|esl|teach(?:ing)?|tutor(?:ing)?)\b|英文|英語|教|補習|練/i;
+  function audienceWord(q) {
+    return q.tokens.some(function (t) { return AUDIENCE_EN[norm(t)]; }) || AUDIENCE_ZH.some(function (w) { return q.low.indexOf(w) >= 0; });
   }
 
   // D1: "any other recommendations", "something else", 還有其他推薦嗎, 仲有冇, 悶.
   // Only follow-up words, teaching words and filler: no new age, level, skill or topic.
-  var FOLLOW_EN = toSet('more another other others else different next again alternative alternatives option options bored boring show give'.split(' ').map(norm));
-  var FOLLOW_EN_RE = /\b(?:more|another|others?|else|different|next|again|alternatives?|options|bored|boring)\b/i;
-  var FOLLOW_ZH = ['還有', '仲有', '其他', '其它', '另外', '別的', '第二啲', '第二隻', '多啲', '多一啲', '唔啱', '換', '再', '悶'];
+  var FOLLOW_EN = toSet('more another other others else different next again alternative alternatives option options bored boring show give there see like try new same two three they re let they\'re we\'re i\'m you\'re it\'s there\'s what\'s that\'s let\'s'.split(' ').map(norm));
+  var FOLLOW_EN_RE = /\b(?:more|another|others?|else|different|next|again|alternatives?|options|bored|boring|new)\b/i;
+  var FOLLOW_ZH = ['還有', '仲有', '其他', '其它', '另外', '別的', '第二', '下一', '更多', '多啲', '多一啲', '唔啱', '換', '再', '悶'];
+  var FOLLOW_ZH_FILLER = ['可唔可以', '可不可以', '沒有', '覺得', '沒', '無', '唔', '來', '嚟'];
+  // "No more, thanks", "Thanks again", "hello again", "next week": not a follow-up.
+  var NOT_FOLLOW_RE = /\b(?:no|not|nothing|none|don'?t)\b[^.?!]*\b(?:more|else|other|another)\b|\b(?:thanks?|thank you|hello|hi|hey|bye)\b[^.?!]*\bagain\b|\bnext\s+(?:week|weekend|time|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|唔使|不用|夠喇|夠了/i;
   function isFollowUp(text) {
     var q = parseQuery(text);
-    if (q.hasAge || q.hasLevel || q.skills.length || q.reading || q.minutes != null) return false;
+    // A lesson length may come with it ("another one for 20 minutes"); a new age, level or skill may not.
+    if (q.hasAge || q.hasLevel || q.skills.length || q.reading) return false;
+    if (NOT_FOLLOW_RE.test(q.low)) return false;
     var zhHit = FOLLOW_ZH.some(function (w) { return q.low.indexOf(w) >= 0; });
     if (!FOLLOW_EN_RE.test(q.low) && !zhHit) return false;
     if (q.rest.some(function (t) { return !FOLLOW_EN[t]; })) return false;
     var left = q.zhWork;
-    FOLLOW_ZH.concat(TEACH_ZH).forEach(function (w) { left = left.split(w).join(' '); });
+    FOLLOW_ZH.concat(FOLLOW_ZH_FILLER, TEACH_ZH).forEach(function (w) { left = left.split(w).join(' '); });
     return !left.match(CJK_ALL);
   }
 
@@ -797,17 +810,15 @@
   // "Book a meeting room in the office" stays the off-topic reply.
   function teachingRequest(q) {
     return !!(q.skills.length || q.hasAge || q.hasLevel || q.minutes != null || q.reading ||
-      TEACHING_CONTEXT.test(q.low) || q.tokens.some(function (t) { return AUDIENCE_EN[norm(t)]; }) ||
-      AUDIENCE_ZH.some(function (w) { return q.low.indexOf(w) >= 0; }));
+      TEACHING_CONTEXT.test(q.low) || audienceWord(q));
   }
 
   // The cards AI mode must keep: the keyword answer's first card, and its
-  // best-scoring card if a free game was put in front of it. Only games that
-  // matched the question's keywords count.
+  // best keyword match if a free game was put in front of it.
   function keywordLead(ctx, items) {
     function sc(it) { return Math.max.apply(null, itemIds(it).map(function (id) { var x = ctx.scoreOf[id]; return x && x.kw > 0 ? x.s : -1; })); }
     var lead = [];
-    if (items.length && sc(items[0]) >= 0) lead.push(itemIds(items[0])[0]);
+    if (items.length) lead.push(itemIds(items[0])[0]);
     var best = items.filter(function (it) { return sc(it) >= 0; })
       .map(function (it, i) { return { it: it, s: sc(it), i: i }; })
       .sort(function (a, b) { return b.s - a.s || a.i - b.i; })[0];
@@ -823,6 +834,7 @@
     }
     var res = recommendRules(cat, prevText, { exclude: exclude });
     if (res.kind === 'picks') { res.followUp = true; return res; }
+    if (res.kind === 'ask' && res.askType !== 'noGames') return res;
     var q = parseQuery(prevText);
     var ctx = buildContext(cat, q, exclude);
     return withCtx(result(q, {
@@ -1280,7 +1292,8 @@
       pendingCheck = false;
       var hide = false;
       try { hide = Array.prototype.some.call(document.querySelectorAll(selector), visible); } catch (e) { hide = false; }
-      if (hide) { S.root.setAttribute('hidden', ''); } else S.root.removeAttribute('hidden');
+      // While hidden, keep checking: a pop-up that fades out makes no further DOM change.
+      if (hide) { S.root.setAttribute('hidden', ''); schedule(); } else S.root.removeAttribute('hidden');
     }
     function schedule() { if (!pendingCheck) { pendingCheck = true; setTimeout(check, 200); } }
     new MutationObserver(function (list) {
@@ -1344,6 +1357,24 @@
       S.privacy, S.offer, S.log, composer,
     ]);
     S.root.appendChild(S.panel);
+    // A rotation or resize changes line breaks: measure the descriptions again.
+    var lastWidth = 0;
+    var refit = function () {
+      var w = S.log.clientWidth;
+      if (!w || w === lastWidth) return;
+      var first = !lastWidth;
+      lastWidth = w;
+      if (first) return;
+      Array.prototype.forEach.call(S.log.querySelectorAll('.ll-desc'), function (d) {
+        if (d.classList.contains('ll-open')) return;
+        d._llFit = false;
+        var more = d.nextSibling;
+        if (more && more.classList && more.classList.contains('ll-more')) more.remove();
+      });
+      fitDescs(S.log);
+    };
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(refit).observe(S.log);
+    else window.addEventListener('resize', refit);
     applyLabels();
     renderLog();
   }
@@ -1481,7 +1512,12 @@
     box.textContent = '';
     S.progressText = S.progressBar = null;
     var mb = S.bytes ? toMB(S.bytes) : '';
-    if (S.ai === 'offer') {
+    if (S.ai === 'offer' && !S.offerOpen && S.turns.some(function (tu) { return tu.who === 'you'; })) {
+      // Once the conversation has started, the offer takes one line so answers keep the room.
+      box.hidden = false;
+      box.className = 'll-offer ll-offer-min';
+      box.appendChild(el('button', { type: 'button', 'class': 'll-link', text: fmt(L.offerAgain, { mb: mb }), on: { click: function () { S.offerOpen = true; renderOffer(); } } }));
+    } else if (S.ai === 'offer') {
       box.hidden = false;
       box.className = 'll-offer';
       box.appendChild(el('p', { 'class': 'll-offer-title', text: L.offerTitle }));
@@ -1492,7 +1528,7 @@
     } else if (S.ai === 'declined') {
       box.hidden = false;
       box.className = 'll-offer ll-offer-min';
-      box.appendChild(el('button', { type: 'button', 'class': 'll-link', text: fmt(L.offerAgain, { mb: mb }), on: { click: function () { setAI('offer'); } } }));
+      box.appendChild(el('button', { type: 'button', 'class': 'll-link', text: fmt(L.offerAgain, { mb: mb }), on: { click: function () { S.offerOpen = true; setAI('offer'); } } }));
     } else if (S.ai === 'downloading' || S.ai === 'starting') {
       box.hidden = false;
       box.className = 'll-offer';
@@ -1600,6 +1636,8 @@
       S.pending = null;
       follow = { followUp: true, exclude: shownIds() };
       full = S.lastQuery || '';
+      // "another one for 20 minutes": the new length goes with it.
+      if (full && parseQuery(text).minutes != null) full += '. ' + text;
       noAsk = true;
     } else if (S.pending) {
       var p = S.pending, n = /^\s*(\d)\s*[.)]?\s*$/.exec(text);
@@ -1615,11 +1653,14 @@
       if (isAnswer) {
         full = (p.text ? p.text + '. ' : '') + (picked || answerPhrase(p, text));
         noAsk = true;
+        // A skill picked after "no more games": still nothing shown twice.
+        if (p.noMore) follow = { exclude: shownIds() };
       }
     }
 
     S.turns.push({ who: 'you', text: text });
     if (switched) renderLog(); else if (!hiddenLog()) appendTurn(S.turns[S.turns.length - 1]);
+    if (S.ai === 'offer') renderOffer();
     if (!S.cat) {
       S.queued = { text: full, noAsk: noAsk, follow: follow };
       if (!S.catLoading) retryCatalogue();
@@ -1640,7 +1681,7 @@
       S.busy = false; onInput();
       var turn = { who: 'bot', res: res, text: text };
       S.turns.push(turn);
-      if (res.kind === 'picks' && !follow) S.lastQuery = text;
+      if ((res.kind === 'picks' || res.kind === 'ask') && !(follow && follow.followUp)) S.lastQuery = text;
       setPending(res, text);
       if (hiddenLog()) return;
       var box = appendTurn(turn);
@@ -1671,7 +1712,7 @@
     if (res.kind !== 'ask' || (res.askType !== 'age' && !(res.choices || []).length)) return;
     S.pending = res.askType === 'age'
       ? { type: 'age', text: text, choices: [0, 1, 2, 3, 4], lang: S.lang }
-      : { type: 'skill', text: text, choices: res.choices || [], lang: S.lang };
+      : { type: 'skill', text: text, choices: res.choices || [], lang: S.lang, noMore: !!res.noMore };
   }
 
   function skillLabel(skill) {
@@ -1685,12 +1726,12 @@
     var box = el('div', { 'class': 'll-msg ll-bot' });
     var isLast = S.turns[S.turns.length - 1] === turn;
     if (res.kind === 'ask') {
-      var pend = { text: turn.text };
+      var pend = { text: turn.text, noMore: !!res.noMore };
       if (res.askType === 'age') {
         box.appendChild(el('p', { text: L.askAge }));
         pend.type = 'age'; pend.choices = [0, 1, 2, 3, 4];
       } else {
-        var msg = res.askType === 'skill' ? (res.noMore ? L.noMore : L.askSkill)
+        var msg = res.askType === 'skill' ? (res.noMore ? (res.choices.length ? L.noMore : L.noMoreNone) : L.askSkill)
           : res.askType === 'reading' ? L.noReading
           : fmt(res.minAge != null ? L.noSkillAge : L.noSkillLevel, { skill: skillLabel(res.skill), age: res.minAge }) + (res.choices.length ? (uiLang() === 'zh' ? '' : ' ') + L.tryThese : '');
         box.appendChild(el('p', { text: msg }));
@@ -1729,7 +1770,7 @@
       var numbered = pending.type !== 'age';
       wrap.appendChild(el('button', {
         type: 'button', 'class': 'll-chip', disabled: !active,
-        on: { click: function () { S.pending = { type: pending.type, text: pending.text, choices: pending.choices, lang: S.lang }; submit(choiceLabel(pending, i)); } },
+        on: { click: function () { S.pending = { type: pending.type, text: pending.text, choices: pending.choices, lang: S.lang, noMore: pending.noMore }; submit(choiceLabel(pending, i)); } },
       }, numbered ? [el('span', { 'class': 'll-num', 'aria-hidden': 'true', text: String(i + 1) }), label] : [label]));
     });
     return wrap;

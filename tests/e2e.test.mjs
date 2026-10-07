@@ -849,7 +849,8 @@ test('Composer, header and conversation layout (B1-B5, C1-C10)', async () => {
     const { context, page } = await newPage({ viewport });
     await openWidget(page);
     const tag = `${viewport.width}px`;
-    // C4: the text box has focus, B3: the ring is on the composer box, not the text box
+    // C4: the text box has focus (the widget focuses it 30 ms after opening), B3: the ring is on the composer box
+    await page.waitForFunction(() => document.activeElement && document.activeElement.classList.contains('ll-input'), null, { timeout: 2000 });
     assert.equal(await page.evaluate(() => document.activeElement.classList.contains('ll-input')), true, `${tag}: text box focused on open`);
     const m = await page.evaluate(() => {
       const q = (s) => document.querySelector('#ll-assistant ' + s), cs = (s) => getComputedStyle(q(s));
@@ -1115,3 +1116,120 @@ test('Screenshots at 320, 375 and 1280px with the site fonts (E5)', async () => 
   }
 });
 
+
+// ---------- fixes from the fourth review round ----------
+
+test('Follow-up edge cases: after "no more", after an ask, nothing left at all (review 4)', async () => {
+  // A skill picked after "No more games fit that" shows that skill's games, none repeated.
+  let { context, page } = await newPage();
+  await openWidget(page);
+  const first = await ask(page, 'Age 7 phonics');
+  await ask(page, 'more');
+  let r = await ask(page, 'more');
+  assert.equal(r.turn.noMore, true, 'phonics used up');
+  const shown = (await page.evaluate(() => LLAssistant.internals.turns())).flatMap((t) => t.ids || []);
+  const n0 = await page.evaluate(() => LLAssistant.internals.turns().length);
+  await r.el.locator('.ll-chip').first().click();
+  await page.waitForFunction((n) => LLAssistant.internals.turns().length === n, n0 + 2);
+  const picked = (await page.evaluate(() => LLAssistant.internals.turns())).pop();
+  assert.equal(picked.kind, 'picks');
+  assert.ok(picked.ids.every((id) => !shown.includes(id)), 'no game shown twice: ' + picked.ids.join());
+  assert.ok(picked.ids.every((id) => cat.byId[id].skill === 'speaking'), 'the picked skill: ' + picked.ids.join());
+  assert.ok(first.turn.ids.length > 0);
+  await context.close();
+
+  // A follow-up after "no game for this age" keeps that question.
+  ({ context, page } = await newPage());
+  await openWidget(page);
+  await ask(page, 'Age 9 grammar');
+  await ask(page, 'Age 4 writing');
+  r = await ask(page, 'something else');
+  assert.equal(r.turn.kind, 'ask', 'not the age-9 grammar games again');
+  assert.equal(r.turn.noMore, true);
+  // A follow-up after "Which skill?" asks it again.
+  await ask(page, 'Age 7 phonics');
+  await ask(page, 'Adult');
+  r = await ask(page, 'any other recommendations');
+  assert.equal(r.turn.askType, 'skill');
+  assert.ok(!r.turn.noMore && r.turn.ids.length === 0, 'no phonics game for age 7 after "Adult"');
+  await context.close();
+
+  // Nothing left and no other skill for this age: no promise of a choice.
+  ({ context, page } = await newPage());
+  await openWidget(page);
+  await ask(page, 'Age 4 phonics');
+  await ask(page, 'more');
+  r = await ask(page, 'more');
+  assert.match(r.text, /^No more games fit that yet\.$/);
+  assert.equal(await r.el.locator('.ll-chip').count(), 0);
+  await context.close();
+});
+
+test('Look edge cases: ring while hovered, Chinese titles, every card lifts, offer shrinks, re-measure on resize (review 4)', async () => {
+  // Keyboard focus ring stays while the pointer is over the control.
+  let { context, page } = await newPage({ viewport: { width: 1280, height: 800 } });
+  await openWidget(page);
+  const sendBox = await page.locator('#ll-assistant .ll-send').boundingBox();
+  await page.mouse.move(sendBox.x + 10, sendBox.y + 10);
+  await page.locator('#ll-assistant .ll-input').fill('Form 4 student');
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(200);
+  assert.match(await page.locator('#ll-assistant .ll-send').evaluate((b) => getComputedStyle(b).boxShadow), /rgb\(255, 230, 109\) 0px 0px 0px 4px/, 'Find games: ring while hovered');
+  const r = await ask(page, 'Form 4 student');
+  const chip = r.el.locator('.ll-chip').first();
+  const cb = await chip.boundingBox();
+  await page.mouse.move(cb.x + 5, cb.y + 5);
+  await chip.focus();
+  await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+  await page.waitForTimeout(200);
+  assert.match(await chip.evaluate((b) => getComputedStyle(b).boxShadow), /rgb\(255, 230, 109\) 0px 0px 0px 4px/, 'chip: ring while hovered');
+  // Card titles stay Fredoka 600 in Chinese; the Ladder Vocabulary card lifts too.
+  const zh = await ask(page, '小五學生 生字');
+  assert.deepEqual([...new Set(await zh.el.locator('.ll-card-title').evaluateAll((ts) => ts.map((t) => getComputedStyle(t).fontWeight + ' ' + getComputedStyle(t).letterSpacing)))], ['600 normal']);
+  const family = zh.el.locator('.ll-card:has(p.ll-card-title)');
+  const fb = await family.boundingBox();
+  await page.mouse.move(fb.x + fb.width / 2, fb.y + 10);
+  await page.waitForTimeout(250);
+  assert.notEqual(await family.evaluate((c) => getComputedStyle(c).transform), 'none', 'the Ladder Vocabulary card lifts');
+  await context.close();
+
+  // The AI offer shrinks to one line after the first message, so the first card stays in view.
+  ({ context, page } = await newPage({ fakeGpu: true, viewport: { width: 375, height: 667 } }));
+  await openWidget(page);
+  assert.equal(await page.evaluate(() => LLAssistant.internals.state().ai), 'offer');
+  const a = await ask(page, 'Year 5 speaking');
+  assert.equal(await page.locator('#ll-assistant .ll-offer').evaluate((o) => o.classList.contains('ll-offer-min')), true);
+  assert.ok(await a.el.evaluate((bot) => { const c = bot.querySelector('.ll-card').getBoundingClientRect(), l = bot.closest('.ll-log').getBoundingClientRect(); return c.top >= l.top && c.bottom <= l.bottom; }), 'first card fully visible with the offer');
+  await page.locator('#ll-assistant .ll-offer .ll-link').click();
+  assert.equal(await page.locator('#ll-assistant .ll-offer .ll-btn').count(), 1, 'the full offer comes back on request');
+  await context.close();
+
+  // After a rotation, every description longer than three lines has "more".
+  ({ context, page } = await newPage({ viewport: { width: 667, height: 375 } }));
+  await openWidget(page);
+  for (const q of ['7 year old phonics', 'Year 5 speaking', 'IELTS speaking adult']) await ask(page, q);
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.waitForTimeout(300);
+  const cut = await page.evaluate(() => [...document.querySelectorAll('#ll-assistant .ll-desc:not(.ll-open)')].filter((d) => {
+    const more = d.nextSibling && d.nextSibling.classList && d.nextSibling.classList.contains('ll-more');
+    return d.scrollHeight > d.clientHeight + 1 !== !!more;
+  }).length);
+  assert.equal(cut, 0, 'descriptions cut without "more", or "more" on text that fits');
+  await context.close();
+});
+
+test('A lock pop-up that fades out does not leave the widget hidden (review 4)', async () => {
+  const { context, page } = await newPage();
+  await context.route('**/fade-page.html', (r) => r.fulfill({ contentType: 'text/html', body:
+    '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title><style>#lock{position:fixed;inset:0;background:#0006;opacity:0;visibility:hidden;transition:opacity .4s,visibility .4s}#lock.open{opacity:1;visibility:visible}</style></head><body>' +
+    '<a class="card" data-tier="teacher" data-title="Ladder Talk" href="/x">Ladder Talk</a><div id="lock"><button id="lock-close">Close</button></div>' +
+    '<script>document.querySelector("a.card").addEventListener("click",function(e){e.preventDefault();document.getElementById("lock").classList.add("open");});document.getElementById("lock-close").onclick=function(){document.getElementById("lock").classList.remove("open");};</script>' +
+    '<script src="/dist/ll-assistant/ll-assistant.js" defer data-avoid="#lock"></script></body></html>' }));
+  await openWidget(page, `${BASE}/fade-page.html`);
+  const { el } = await ask(page, 'adult business english');
+  await el.locator('.ll-card-title', { hasText: 'Ladder Talk' }).click();
+  await page.waitForFunction(() => document.getElementById('ll-assistant').hidden);
+  await page.locator('#lock-close').click();
+  await page.waitForFunction(() => !document.getElementById('ll-assistant').hidden, null, { timeout: 3000 });
+  await context.close();
+});

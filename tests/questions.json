@@ -147,6 +147,19 @@
     {"id": "follow-other-zh", "after": "Year 5 口說", "text": "還有其他推薦嗎", "lang": "zh", "expect": "picks", "newOnly": true, "minPicks": 1},
     {"id": "follow-still-zh", "after": "8歲 拼讀", "text": "仲有冇", "lang": "zh", "expect": "picks", "newOnly": true},
     {"id": "follow-others-zh", "after": "成人 寫作", "text": "其他", "lang": "zh", "expect": "picks", "newOnly": true, "firstNotKid": true},
-    {"id": "follow-bored-zh", "after": "6歲 口語", "text": "悶", "lang": "zh", "expect": "ask-more"}
+    {"id": "follow-bored-zh", "after": "6歲 口語", "text": "悶", "lang": "zh", "expect": "ask-more"},
+    {"id": "follow-anything-en", "after": "Age 8 vocab", "text": "Is there anything else?", "lang": "en", "expect": "picks", "newOnly": true},
+    {"id": "follow-new-en", "after": "Age 8 vocab", "text": "something new", "lang": "en", "expect": "picks", "newOnly": true},
+    {"id": "follow-length-en", "after": "Age 8 vocab", "text": "another one for 20 minutes", "lang": "en", "expect": "picks", "newOnly": true, "maxPicks": 2},
+    {"id": "follow-more-zh", "after": "8歲 生字", "text": "更多", "lang": "zh", "expect": "picks", "newOnly": true},
+    {"id": "follow-second-zh", "after": "8歲 生字", "text": "有冇第二個", "lang": "zh", "expect": "picks", "newOnly": true},
+    {"id": "follow-length-zh", "after": "8歲 生字", "text": "仲有冇其他 20分鐘", "lang": "zh", "expect": "picks", "newOnly": true, "maxPicks": 2},
+    {"id": "follow-after-ask-en", "after": "Adult", "text": "any other recommendations", "lang": "en", "expect": "ask-skill"},
+    {"id": "follow-after-nogames-en", "after": "Age 4 writing", "text": "something else", "lang": "en", "expect": "ask-more"},
+    {"id": "no-more-thanks-en", "after": "Age 8 vocab", "text": "No more, thanks", "lang": "en", "expect": "none"},
+    {"id": "thanks-again-en", "after": "Age 8 vocab", "text": "Thanks again!", "lang": "en", "expect": "none"},
+    {"id": "next-week-en", "text": "Next week", "lang": "en", "expect": "none"},
+    {"id": "cooking-class-en", "text": "Where is my cooking class?", "lang": "en", "expect": "none"},
+    {"id": "meeting-room-en", "text": "Book a meeting room in the office for Monday", "lang": "en", "expect": "none"}
   ]
 }

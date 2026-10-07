@@ -60,7 +60,7 @@
 }
 #ll-assistant .ll-cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--ll-sh-lift); }
 #ll-assistant .ll-cta:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
-#ll-assistant .ll-cta:focus-visible { box-shadow: var(--ll-ring); }
+#ll-assistant .ll-cta:focus-visible, #ll-assistant .ll-cta:focus-visible:hover:not(:disabled) { box-shadow: var(--ll-ring); }
 /* Disabled: as on the site (B5) */
 #ll-assistant .ll-cta:disabled { background: var(--ll-line); color: var(--ll-ink-soft); border-color: var(--ll-muted); box-shadow: none; cursor: default; }
 
@@ -75,7 +75,7 @@
 #ll-assistant .ll-btn { min-height: 44px; padding: 8px 20px; font-size: 15px; box-shadow: var(--ll-sh-rung); }
 #ll-assistant .ll-btn:hover:not(:disabled), #ll-assistant .ll-close:hover { transform: translateY(-2px); box-shadow: var(--ll-sh-rung); }
 #ll-assistant .ll-btn:active:not(:disabled), #ll-assistant .ll-close:active { transform: translateY(2px); box-shadow: none; }
-#ll-assistant .ll-btn:focus-visible, #ll-assistant .ll-close:focus-visible { box-shadow: var(--ll-ring); }
+#ll-assistant .ll-btn:focus-visible, #ll-assistant .ll-btn:focus-visible:hover:not(:disabled), #ll-assistant .ll-close:focus-visible, #ll-assistant .ll-close:focus-visible:hover { box-shadow: var(--ll-ring); }
 #ll-assistant .ll-btn-block { display: flex; width: 100%; margin: 0 0 6px; }
 
 /* Quick-pick chips and numbered choices: the library .chip (A6) */
@@ -88,7 +88,7 @@
 }
 #ll-assistant .ll-chip:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--ll-sh-rung); }
 #ll-assistant .ll-chip:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
-#ll-assistant .ll-chip:focus-visible { box-shadow: var(--ll-ring); }
+#ll-assistant .ll-chip:focus-visible, #ll-assistant .ll-chip:focus-visible:hover:not(:disabled) { box-shadow: var(--ll-ring); }
 #ll-assistant .ll-chip:disabled { cursor: default; color: var(--ll-ink-soft); }
 #ll-assistant .ll-num { font-weight: 700; }
 
@@ -129,8 +129,7 @@
 }
 /* Chinese headings: weight 700 and 0.02em (style guide §2). data-l="2" is Chinese. */
 #ll-assistant .ll-panel[data-l="2"] .ll-title,
-#ll-assistant .ll-panel[data-l="2"] .ll-offer-title,
-#ll-assistant .ll-panel[data-l="2"] .ll-card-title { font-weight: 700; letter-spacing: .02em; }
+#ll-assistant .ll-panel[data-l="2"] .ll-offer-title { font-weight: 700; letter-spacing: .02em; }
 #ll-assistant .ll-close { flex: 0 0 auto; width: 36px; height: 36px; padding: 0; font-size: 22px; line-height: 1; }
 #ll-assistant .ll-privacy {
   display: flex; align-items: flex-start; gap: 6px; margin: 0;
@@ -190,8 +189,8 @@
   transition: transform .12s, box-shadow .12s;
 }
 #ll-assistant .ll-card:has(> button.ll-card-title) { cursor: pointer; }
-#ll-assistant .ll-card:has(> button.ll-card-title):hover,
-#ll-assistant .ll-card:has(> button.ll-card-title):focus-within { transform: translateY(-4px); box-shadow: var(--ll-sh-lift); outline: none; }
+#ll-assistant .ll-card:hover,
+#ll-assistant .ll-card:focus-within { transform: translateY(-4px); box-shadow: var(--ll-sh-lift); outline: none; }
 /* Keyboard focus on the title draws the ring on the card, not on the text */
 #ll-assistant .ll-card:has(> button.ll-card-title:focus-visible) { box-shadow: var(--ll-sh-lift), var(--ll-ring); }
 #ll-assistant .ll-card-title {
