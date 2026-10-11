@@ -587,6 +587,10 @@
     return /\bworkplace\b|\boffice\b|\b(?:boss|bosses|colleagues?|co-?workers?)\b|上班|返工|職場|工作(?!紙)|開會|會議|同事|老闆|上司/.test(low);
   }
 
+  // "first lesson", "next class": which lesson it is, not the topic "first"
+  // (first conditional, first sound) and not a word that needs a match.
+  var WHICH_LESSON = /\b(first|last|next|this|every|each)[\s-]+(lessons?|class(?:es)?|sessions?|day|week|term)\b/g;
+
   function parseQuery(text) {
     var raw = String(text || '').slice(0, 1000).replace(/https?:\/\/\S+|www\.\S+/gi, ' ');
     var low = normaliseNumbers(raw.toLowerCase()).replace(RELATION_RE, ' ');
@@ -596,6 +600,7 @@
     // Keywords are matched without the lesson length or phrases like "first
     // time", so "30分鐘" or "first time" never count as a topic.
     var scoreText = work.replace(/\b(first|last|next|this|every|each|full|part|free|spare|some|any|long|short|good|great|fun|hard|tough|difficult|nice)[\s-]+time\b/g, ' ')
+      .replace(WHICH_LESSON, ' $2 ')
       // "group work", "work on", "worksheet", 工作紙: a way of working, not the topic "work"
       .replace(/\b(group|pair|team|class|home|art)[\s-]*work(?:s|ing)?\b/g, '$1 ')
       .replace(/\bwork(?:s|ing)?(?=\s+(?:on|out|in\s+(?:groups?|pairs?|teams?)|sheets?|books?)\b)/g, ' ')
@@ -636,6 +641,9 @@
       skills.forEach(function (x) { if (!x.strong) weakWords = weakWords.concat(x.words); });
       skills = skills.filter(function (x) { return x.strong; });
     }
+    // The skills the teacher named: a skill word that is not only an everyday
+    // word ("talk", "words"). A head count below adds "group" without naming it.
+    var namedSkills = skills.filter(function (x) { return x.strong; }).map(function (x) { return x.id; });
     skills = skills.map(function (x) { return x.id; });
     // 口說 (the site's tag) and 口語 (common usage) are one word: the catalogue
     // uses both, so either one matches games tagged with the other.
@@ -646,7 +654,7 @@
     // "Form 4 students" is a school year, not a group of four.
     // ABC means letters to learn only next to "cannot yet" or learning words
     // (唔識 ABC, 還沒認得 ABC, can't say the ABC), not in "ABC Bank" or "ABC Primary School".
-    if (tokSet.abc && skills.indexOf('phonics') < 0 && CANNOT_YET.test(low)) skills.push('phonics');
+    if (tokSet.abc && skills.indexOf('phonics') < 0 && CANNOT_YET.test(low)) { skills.push('phonics'); namedSkills.push('phonics'); }
     if (/\bgroup of\b|\bclass of\b|\bwhole class\b|\d+\s*(?:students|kids|learners|children)\b|\d+\s*個(?:學生|小朋友|細路)/i.test(work) && skills.indexOf('group') < 0) skills.push('group');
     var reading = Object.keys(READING_EN).some(function (w) { return tokSet[w]; }) || readingZh(raw);
 
@@ -677,7 +685,7 @@
     var adultSignal = older || ((business || exam) && !(age && age.max < 13));
 
     // A5: nothing left but teaching words?
-    var rest = tokens(work).map(norm).filter(function (t) { return !STOP[t] && !TEACH_EN[t] && !/^\d+$/.test(t); });
+    var rest = tokens(work.replace(WHICH_LESSON, ' $2 ')).map(norm).filter(function (t) { return !STOP[t] && !TEACH_EN[t] && !/^\d+$/.test(t); });
     var zhRest = work;
     TEACH_ZH.forEach(function (w) { zhRest = zhRest.split(w).join(' '); });
     zhRest = (zhRest.replace(/[一二兩三四五六七八九十年]/g, ' ').match(CJK_ALL) || []).join('');
@@ -694,6 +702,7 @@
       levels: levelList,
       hasLevel: levelList.length > 0,
       skills: skills,
+      namedSkills: namedSkills,
       zhSkillWords: zhSkillWords,
       reading: reading,
       minutes: minutes,
@@ -866,11 +875,8 @@
     function isKid(it) { return itemIds(it).every(function (id) { return byId[id].kid; }); }
     function maxAgeMin(it) { return Math.max.apply(null, itemIds(it).map(function (id) { return byId[id].age_min || 0; })); }
     // Every game of the asked-for skill that passed the filters, best first.
-    // No skill asked: the skill of the best keyword match (Mini Business Tycoon
-    // for "adult business english"), in AI mode too, whatever the model put first.
     function skillPool() {
-      var top = ctx.scored.length ? ctx.scored[0].g : items.length ? byId[itemIds(items[0])[0]] : null;
-      var skills = q.skills.length ? q.skills : top ? [top.skill] : [];
+      var skills = q.skills.length ? q.skills : (items.length ? [byId[itemIds(items[0])[0]].skill] : []);
       return ctx.eligible
         .filter(function (g) { return skills.indexOf(g.skill) >= 0; })
         .map(function (g, i) { var sc = ctx.scoreOf[g.id]; return { id: g.id, s: sc ? sc.s : 0, i: i }; })
@@ -879,12 +885,27 @@
     }
     // AI mode, a teen, adult, exam or business question that names a topic or
     // a skill ("adult business english"): a model pick that matches neither,
-    // only "adult" (Clinic Day, Quick Fire Flashcards), is off topic and left
-    // out, so it cannot push a game about the topic out of the cards (round 7).
-    var focused = !!lead && q.adultSignal && (q.skills.length > 0 || ctx.scored.some(function (x) { return x.kw > 0; }));
+    // only "adult" (Clinic Day, Quick Fire Flashcards), is off topic. It is not
+    // taken from the model's picks or from the extra games of a skill, so it
+    // cannot push a game about the topic out of the cards (round 7). A head
+    // count ("6 students") or an everyday word ("talk") names no skill.
+    var named = q.namedSkills || [];
+    var focused = !!lead && q.adultSignal && (named.length > 0 || ctx.scored.some(function (x) { return x.kw > 0; }));
     function offTopic(id) {
-      var x = ctx.scoreOf[id];
-      return focused && lead.indexOf(id) < 0 && !!byId[id] && !(x && x.kw > 0) && q.skills.indexOf(byId[id].skill) < 0;
+      var g = byId[id];
+      if (!focused || !g || lead.indexOf(id) >= 0 || named.indexOf(g.skill) >= 0) return false;
+      // Ladder Vocabulary is one card: it is on topic if any of its levels is.
+      var f = familyOf(g), ids = f && ctx.families[f] ? ctx.families[f] : [id];
+      return !ids.some(function (x) { return ctx.scoreOf[x] && ctx.scoreOf[x].kw > 0; });
+    }
+    // AI mode: the cards beyond max go, never one of the keyword lead's (a
+    // kid-themed lead card sits below the others, so a plain cut would drop it).
+    function trim(max) {
+      if (!lead) { items = items.slice(0, max); return; }
+      for (var i = items.length - 1; i >= 0 && items.length > max; i--) {
+        if (!itemIds(items[i]).some(function (id) { return lead.indexOf(id) >= 0; })) items.splice(i, 1);
+      }
+      items = items.slice(0, max);
     }
 
     startIds.forEach(function (id) { if (!offTopic(id)) push(id); });
@@ -928,16 +949,16 @@
     }
 
     // Not with several skills named: the extra games of one skill would push another skill's game out.
-    if (q.adultSignal && !ctx.onlyRel && !ctx.facetIds) skillPool().forEach(function (id) { if (!byId[id].kid) push(id); });
+    if (q.adultSignal && !ctx.onlyRel && !ctx.facetIds) skillPool().forEach(function (id) { if (!byId[id].kid && !offTopic(id)) push(id); });
     arrange();
-    items = items.slice(0, N.max);
+    trim(N.max);
 
     // Top up to the minimum (A7): strong matches first, then the next best
     // games of the same skill, then any other match, then classroom tools.
     if (items.length < N.min) {
       var fits = function (g) { return !(q.adultSignal && g.kid); };
-      // AI mode: the keyword answer's cards first, in its order.
-      if (lead) (ctx.kwIds || []).forEach(function (id) { if (items.length < N.min) push(id); });
+      // Off-topic picks left out: the keyword answer's cards first, in its order.
+      if (focused) (ctx.kwIds || []).forEach(function (id) { if (items.length < N.min) push(id); });
       ctx.rel.forEach(function (x) { if (items.length < N.min) push(x.g.id); });
       skillPool().forEach(function (id) { if (items.length < N.min) push(id); });
       ctx.scored.forEach(function (x) { if (items.length < N.min && fits(x.g)) push(x.g.id); });
@@ -960,7 +981,7 @@
       items.unshift({ id: free.g.id });
     }
 
-    items = items.slice(0, N.max);
+    trim(N.max);
     if (!items.some(function (it) { return it.kid; })) kidNote = false;
     return { items: items, kidNote: kidNote };
   }
@@ -1035,10 +1056,17 @@
     }
     // A festival and a skill named: the festival game most about that skill
     // comes first, before games that only list the festival's name (round 7).
-    var festPick = ctx.facetIds ? null : festivalSkillPick(cat, q, ctx.scored.map(function (x) { return x.g.id; }));
+    // With several skills named, it is that skill's game (「中秋節口說同聆聽」).
+    var festPick = festivalSkillPick(cat, q, ctx.scored.map(function (x) { return x.g.id; }));
     if (festPick) {
       ctx.festPick = festPick;
-      start = [festPick].concat(start.filter(function (id) { return id !== festPick; }));
+      if (ctx.facetIds) {
+        var fp = ctx.facetIds, k = fp.map(function (id) { return cat.byId[id].skill; }).indexOf(cat.byId[festPick].skill);
+        if (fp.indexOf(festPick) < 0) { if (k >= 0) fp[k] = festPick; else fp.unshift(festPick); }
+        start = fp.concat(start.filter(function (id) { return fp.indexOf(id) < 0; }));
+      } else {
+        start = [festPick].concat(start.filter(function (id) { return id !== festPick; }));
+      }
     }
     var fin = finalize(ctx, start);
     if (!fin.items.length) return withCtx(result(q, { kind: 'none' }), ctx);
@@ -1661,12 +1689,13 @@
   // the first of ids (the higher score). null without a festival or a skill,
   // or when no festival game fits the skill: then the usual order decides.
   function festivalSkillPick(cat, q, ids) {
-    if (!(q.cset && q.cset.festival) || !q.skills || !q.skills.length) return null;
+    var skills = q.namedSkills || [];
+    if (!(q.cset && q.cset.festival) || !skills.length) return null;
     var best = null, bestFit = 0;
     ids.forEach(function (id) {
       var g = cat.byId[id];
       if (!g || (q.adultSignal && g.kid) || !festivalGame(cat, { id: id })) return;
-      var fit = skillFit(g, q.skills);
+      var fit = skillFit(g, skills);
       if (fit > bestFit) { best = id; bestFit = fit; }
     });
     return best;

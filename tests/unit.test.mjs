@@ -541,6 +541,41 @@ test('festival and skill named: Main is the festival game for that skill, in key
   assert.equal(mainOf(core.buildPlan(core.recommendRules(cat3, 'Form 4 中秋節口說'), cat3))[0], LF);
 });
 
+test('round 7 review: the two rules stay inside their cases (festival with several skills, everyday words, head counts, Ladder Vocabulary, the lead, children, "first lesson")', async () => {
+  const FSB = 'speaking_FestivalSentenceBuilder', LF = 'speaking_LadderFestivals';
+  const mainIn = (r) => mainOf(core.buildPlan(r, cat))[0];
+  const ai = (text, picks) => core.recommendAI(cat, reply(() => JSON.stringify({ picks })), text);
+  // A festival with several skills named: the speaking card is the festival speaking game, in both modes.
+  assert.equal(mainIn(core.recommendRules(cat, 'Form 4 中秋節口說同聆聽 20分鐘')), FSB);
+  assert.equal(mainIn(await ai('Form 4 Mid-Autumn speaking and grammar', ['speaking_LadderTalk', 'listening_DetectiveDictation', 'grammar_Detective'])), FSB);
+  // "talk" is an everyday word, not a skill named: no skill, so Ladder Festivals.
+  const talk = core.recommendRules(cat, "Let's talk about Christmas games for my 9 year olds");
+  assert.deepEqual(talk.q.namedSkills, []);
+  assert.equal(mainIn(talk), LF);
+  // Keyword mode outside festival + skill is as before round 7.
+  assert.deepEqual(core.recommendRules(cat, 'kids animals, 45 min').ids, ['group_ZooDetective', 'group_Discussion']);
+  assert.deepEqual(core.recommendRules(cat, 'kids email, 45 min').ids, ['writing_RolePlayWriting', 'writing_TowerOfSentences']);
+  assert.deepEqual(core.recommendRules(cat, 'adult warm up, 45 min').ids, ['tools_LadderWheel', 'tools_BigText']);
+  // A dropped pick does not come back through the extra games of a skill.
+  for (const text of ['adult self introduction', '成人初學者 拼讀']) {
+    const r = await ai(text, ['speaking_QuickFireFlashcards', 'speaking_DoctorVisit', 'speaking_HookLab']);
+    assert.ok(!r.ids.includes('speaking_DoctorVisit'), text);
+  }
+  assert.deepEqual((await ai('adult self introduction', ['speaking_QuickFireFlashcards', 'speaking_DoctorVisit', 'speaking_HookLab'])).ids, core.recommendRules(cat, 'adult self introduction').ids);
+  // A head count names no skill: the model's adult speaking picks stay.
+  assert.ok((await ai('adults, 6 students', ['speaking_LadderTalk', 'speaking_QuickFireFlashcards'])).ids.includes('speaking_LadderTalk'));
+  // Ladder Vocabulary is one card, whichever level the model names.
+  assert.deepEqual((await ai('Form 4 KET business', ['vocab_Ladder_b1'])).ids, (await ai('Form 4 KET business', ['vocab_Ladder_a2'])).ids);
+  // The keyword lead's kid-themed card and its note stay when the model fills every place.
+  const lead = await ai('上班族 business english', ['speaking_LadderFrames', 'vocab_CommunityHelpers', 'speaking_LadderTalk']);
+  assert.ok(lead.ids.includes('finance_MiniBusinessTycoonSuper') && lead.kidNote, lead.ids.join());
+  // Children: the off-topic rule and its top-up do not apply.
+  assert.ok((await ai('8 year old Christmas vocabulary', ['vocab_Ladder_a1', 'vocab_Ladder_a2', 'vocab_Ladder_b1'])).ids.includes(LF));
+  // "first lesson" is which lesson, not "first conditional" or "first sound".
+  for (const text of ['adults, first lesson, 45 min', 'kids, first lesson', '8 year old, first lesson']) assert.equal(core.recommendRules(cat, text).askType, 'skill', text);
+  assert.equal(core.recommendRules(cat, 'adults, first conditional').ids[0], 'grammar_ConditionalStudio');
+});
+
 // ---------- plan link (Feature 2) ----------
 
 test('plan link: round trip, only ids, length, language and a marker; nothing typed', () => {
