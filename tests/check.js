@@ -17,6 +17,7 @@
 //   eachOf      [[ids], [ids], ...]: every group has a game shown (one game per named skill)
 //   eachOfSkills every one of these skills has a game shown
 //   skillsFirst the first cards cover these skills, one each, before a second game of any skill
+//   mainAnyOf   the lesson plan's Main game (its one game, or the "Main activity" step) is one of these
 //   sameAs      id of the same question in the other language: same games in the same
 //               order (keyword mode only; checked by the runners, not here)
 //
@@ -46,6 +47,13 @@
   // The cards of a lesson plan in the order shown, as id lists. Takes a plan from
   // core.buildPlan ({id} / {family, ids} items) or from the widget's turns()
   // (arrays of ids).
+  function mainOf(plan) {
+    var ids = function (x) { return Array.isArray(x) ? x : (x.ids || [x.id]); };
+    if (plan.kind === 'single') return ids(plan.item);
+    var st = plan.steps.filter(function (x) { return x.role === 'main' || x.role === null; })[0];
+    return st ? ids(st.ids || st.item) : null;
+  }
+
   function planOrder(plan) {
     var ids = function (x) { return Array.isArray(x) ? x : (x.ids || [x.id]); };
     var main = plan.kind === 'single' ? [ids(plan.item)] : plan.steps.map(function (st) { return ids(st.ids || st.item); });
@@ -120,6 +128,10 @@
       var lead = items.slice(0, q.skillsFirst.length).map(function (it) { return byId[(it.ids || [it.id])[0]].skill; });
       if (lead.slice().sort().join() !== q.skillsFirst.slice().sort().join()) fail('first cards are ' + lead.join(', ') + ', expected one each of ' + q.skillsFirst.join(', '));
     }
+    if (q.mainAnyOf) {
+      var main = res.plan ? mainOf(res.plan) : null;
+      if (!main || !main.some(function (id) { return q.mainAnyOf.indexOf(id) >= 0; })) fail('Main is ' + (main ? main.join('/') : 'nothing') + ', expected one of ' + q.mainAnyOf.join(', '));
+    }
     if (res.plan && (q.firstNotKid || q.freeFirst)) {
       var order = planOrder(res.plan);
       var kidCard = function (list) { return list.every(function (id) { return byId[id] && byId[id].kid; }); };
@@ -159,5 +171,5 @@
     return { ok: fails.length === 0, fails: fails };
   }
 
-  return { checkQuestion: checkQuestion, runQuestion: runQuestion, idsOf: idsOf, firstGame: firstGame, planOrder: planOrder };
+  return { checkQuestion: checkQuestion, runQuestion: runQuestion, idsOf: idsOf, firstGame: firstGame, planOrder: planOrder, mainOf: mainOf };
 });

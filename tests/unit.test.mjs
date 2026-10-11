@@ -388,10 +388,10 @@ test('kid-themed game is never Main for a teen, adult, exam or business question
   const kids = NOPARTS.filter((g) => g.kid).map((g) => g.id);
   plan = core.buildPlan(fakeAnswer([PARENT0[0], kids[0], PARENT0[1]], [9, 8, 5], 30, { adultSignal: true }), cat);
   assert.deepEqual(plan.steps.map((st) => [st.role, st.item.id]), [['warmup', PARENT0[1]], ['main', PARENT0[0]], ['wrapup', kids[0]]]);
-  // The link keeps that shape (marker "o": one step, then the others).
+  // The link keeps that shape: the step, then (after two dots) the other games.
   const one = core.buildPlan(fakeAnswer([kids[0], PARENT0[0], kids[1]], [12, 5, 4], 30, { adultSignal: true }), cat);
   const back = core.parsePlanCode(core.planCode(one, 'en'), cat);
-  assert.match(core.planCode(one, 'en'), /^o30e\./);
+  assert.match(core.planCode(one, 'en'), /^m30e\.[A-Za-z0-9_]+\.\.[A-Za-z0-9_]+\.[A-Za-z0-9_]+$/);
   assert.deepEqual(back.steps.map((st) => [st.role, st.item.id, st.min]), [[null, PARENT0[0], 30]]);
   assert.deepEqual(back.others.map((x) => [x.id, x.kid]), [[kids[0], true], [kids[1], true]], 'kid-themed tags come back from the catalogue');
 });
@@ -431,11 +431,62 @@ test('AI mode: the plan is built in code from the model\'s ids', async () => {
   assert.deepEqual(new Set(ids(plan).concat(plan.others.map((x) => x.id))), new Set(r.ids));
 });
 
+test('festival games are a step only when the question names a festival; otherwise only "Other games that fit" (round 6)', () => {
+  const FEST = new Set(['speaking_LadderFestivals', 'speaking_FestivalSentenceBuilder']);
+  const fest = (x) => (x.ids || [x.id]).every((id) => FEST.has(id));
+  let checked = 0;
+  for (const q of questions.filter((x) => x.expect === 'picks' && !x.after)) {
+    const r = core.recommendRules(cat, q.text);
+    const plan = core.buildPlan(r, cat);
+    const steps = plan.kind === 'single' ? [plan.item] : plan.steps.map((st) => st.item);
+    if (!r.q.cset.festival) {
+      const nonFestShown = steps.concat(plan.others).some((x) => !fest(x));
+      if (nonFestShown) assert.ok(!steps.some(fest), `${q.id}: a festival game is a step without a festival in the question`);
+      checked++;
+    }
+  }
+  assert.ok(checked > 100);
+  // Form 4 speaking: Ladder Talk or Quick Fire is Main, in both languages; Festival Speaking Builder only below.
+  for (const t of ['Form 4 口說', '中四 speaking', 'Form 4 student speaking', '中四學生 口說']) {
+    const plan = core.buildPlan(core.recommendRules(cat, t), cat);
+    const main = plan.kind === 'single' ? plan.item.id : plan.steps.find((st) => st.role === 'main' || st.role === null).item.id;
+    assert.ok(['speaking_LadderTalk', 'speaking_QuickFireFlashcards'].includes(main), `${t}: Main ${main}`);
+    assert.ok(plan.others.some((x) => x.id === 'speaking_FestivalSentenceBuilder'), `${t}: Festival Speaking Builder under other games`);
+  }
+  // With a festival named, a festival game may lead.
+  const mid = core.buildPlan(core.recommendRules(cat, 'Form 4 中秋節口說'), cat);
+  assert.ok(FEST.has(mid.item ? mid.item.id : mid.steps.find((st) => st.role === 'main' || st.role === null).item.id));
+  assert.ok([mid.item].concat(mid.steps.map((st) => st.item), mid.others).filter(Boolean).some((x) => x.id === 'speaking_FestivalSentenceBuilder'));
+  // A multi-game plan's link carries its other games after two dots, and they come back there.
+  const y5 = core.buildPlan(core.recommendRules(cat, 'Age 9 speaking 30 min'), cat);
+  const code = core.planCode(y5, 'en');
+  assert.match(code, /\.\.speaking_FestivalSentenceBuilder$/);
+  const back = core.parsePlanCode(code, cat);
+  assert.deepEqual(back.steps.map((st) => st.item.id), y5.steps.map((st) => st.item.id));
+  assert.deepEqual(back.others.map((x) => x.id), ['speaking_FestivalSentenceBuilder']);
+});
+
+test('Halloween: Ladder Festivals first in keyword mode and in AI mode, whatever the model picks (round 6)', async () => {
+  const g = cat.byId.speaking_LadderFestivals;
+  for (const w of ['Halloween', '萬聖節', '萬聖', 'trick or treat']) assert.ok(g.kw.includes(w), `catalogue keyword ${w}`);
+  const texts = ['Halloween activity for kids', '萬聖節 小朋友', '萬聖 活動', 'trick or treat game for kids', '8歲 萬聖節 口說'];
+  for (const text of texts) {
+    assert.equal(core.recommendRules(cat, text).ids[0], 'speaking_LadderFestivals', `keyword: ${text}`);
+    // Scripted models: one leaves Ladder Festivals out, one puts it last, one picks it alone.
+    for (const picks of [['speaking_FestivalSentenceBuilder'], ['speaking_FestivalSentenceBuilder', 'speaking_LadderFestivals'], ['speaking_LadderFestivals']]) {
+      const r = await core.recommendAI(cat, reply((m, schema) => JSON.stringify({ picks: picks.filter((id) => enumOf(schema).includes(id)) })), text);
+      assert.equal(r.source, 'ai', text);
+      assert.equal(r.ids[0], 'speaking_LadderFestivals', `AI (${picks.join(',')}): ${text} -> ${r.ids.join(', ')}`);
+    }
+  }
+});
+
 // ---------- plan link (Feature 2) ----------
 
 test('plan link: round trip, only ids, length, language and a marker; nothing typed', () => {
   const ORIGIN = 'https://app.example.test';
-  const LINK = /^https:\/\/app\.example\.test\/library#llplan=([ms])(\d{0,3})([ez])((?:\.[A-Za-z0-9_]+(?:~[A-Za-z0-9_]+)*)+)$/;
+  // marker, length, language, step ids, then optionally ".." and the other games' ids.
+  const LINK = /^https:\/\/app\.example\.test\/library#llplan=([ms])(\d{0,4})([ez])((?:\.[A-Za-z0-9_]+(?:~[A-Za-z0-9_]+)*)+)(?:\.((?:\.[A-Za-z0-9_]+(?:~[A-Za-z0-9_]+)*)+))?$/;
   let n = 0;
   for (const q of questions.filter((x) => x.expect === 'picks' && !x.after)) {
     const r = core.recommendRules(cat, q.text);
@@ -443,7 +494,7 @@ test('plan link: round trip, only ids, length, language and a marker; nothing ty
     const link = core.planLink(ORIGIN, plan, q.lang);
     const m = LINK.exec(link);
     assert.ok(m, `${q.id}: ${link}`);
-    const parts = m[4].slice(1).split(/[.~]/);
+    const parts = (m[4] + (m[5] || '')).split(/[.~]/).filter(Boolean);
     assert.ok(parts.every((id) => cat.byId[id]), `${q.id}: only game ids`);
     assert.equal(m[2], r.q.minutes == null ? '' : String(r.q.minutes));
     // Nothing the teacher typed: no word of the question that is not part of a game id.

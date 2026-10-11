@@ -175,8 +175,8 @@
     {"id": "m4-multi-skill-zh", "text": "Form 2學生想練tenses、生字跟文章改錯", "lang": "zh", "expect": "picks", "eachOf": [["grammar_TenseStudio"], ["vocab_Ladder_a1", "vocab_Ladder_a2", "vocab_Ladder_b1", "vocab_Ladder_b2", "vocab_HealthyPlate", "vocab_FruitAtoZ", "vocab_MatchingGame", "vocab_CommunityHelpers"], ["grammar_Detective", "grammar_SentenceSurgery"]], "minPicks": 3, "maxPicks": 3},
     {"id": "m4-multi-skill-en", "text": "Form 2 student, tenses, vocabulary and proofreading", "lang": "en", "expect": "picks", "eachOf": [["grammar_TenseStudio"], ["vocab_Ladder_a1", "vocab_Ladder_a2", "vocab_Ladder_b1", "vocab_Ladder_b2", "vocab_HealthyPlate", "vocab_FruitAtoZ", "vocab_MatchingGame", "vocab_CommunityHelpers"], ["grammar_Detective", "grammar_SentenceSurgery"]], "minPicks": 3, "maxPicks": 3},
     {"id": "m4-speaking-listening-en", "text": "Age 9, speaking and listening", "lang": "en", "expect": "picks", "eachOfSkills": ["speaking", "listening"], "skillsFirst": ["speaking", "listening"]},
-    {"id": "m5-form4-speaking-zh", "text": "中四學生 口說", "lang": "zh", "expect": "picks", "sameAs": "m5-form4-speaking-en"},
-    {"id": "m5-form4-speaking-en", "text": "Form 4 student speaking", "lang": "en", "expect": "picks", "sameAs": "m5-form4-speaking-zh"},
+    {"id": "m5-form4-speaking-zh", "text": "中四學生 口說", "lang": "zh", "expect": "picks", "sameAs": "m5-form4-speaking-en", "mainAnyOf": ["speaking_LadderTalk", "speaking_QuickFireFlashcards"]},
+    {"id": "m5-form4-speaking-en", "text": "Form 4 student speaking", "lang": "en", "expect": "picks", "sameAs": "m5-form4-speaking-zh", "mainAnyOf": ["speaking_LadderTalk", "speaking_QuickFireFlashcards"]},
     {"id": "m6-thanks-after-ask-en", "after": "Age 8", "text": "thanks", "lang": "en", "expect": "smalltalk"},
     {"id": "m6-ok-after-ask-en", "after": "Age 8", "text": "ok", "lang": "en", "expect": "smalltalk"},
     {"id": "m6-thanks-after-ask-zh", "after": "8歲", "text": "多謝", "lang": "zh", "expect": "smalltalk"},
@@ -207,7 +207,15 @@
     {"id": "r-listening-zh", "text": "9歲 聆聽 40分鐘", "lang": "zh", "expect": "picks", "eachOfSkills": ["listening"]},
     {"id": "r-thanks-help-en", "after": "Age 8", "text": "Thanks for your help", "lang": "en", "expect": "smalltalk"},
     {"id": "r-thanks-later-zh", "after": "8歲", "text": "唔該晒，我遲啲再試", "lang": "zh", "expect": "smalltalk"},
-    {"id": "r-ok-skill-en", "after": "Age 8", "text": "ok, speaking please", "lang": "en", "expect": "picks", "eachOfSkills": ["speaking"]}
+    {"id": "r-ok-skill-en", "after": "Age 8", "text": "ok, speaking please", "lang": "en", "expect": "picks", "eachOfSkills": ["speaking"]},
+    {"id": "h-halloween-en", "text": "Halloween activity for kids", "lang": "en", "expect": "picks", "first": "speaking_LadderFestivals"},
+    {"id": "h-halloween-short-zh", "text": "萬聖 活動", "lang": "zh", "expect": "picks", "first": "speaking_LadderFestivals"},
+    {"id": "h-trick-or-treat-en", "text": "trick or treat game for kids", "lang": "en", "expect": "picks", "first": "speaking_LadderFestivals"},
+    {"id": "h-halloween-speaking-zh", "text": "8歲 萬聖節 口說", "lang": "zh", "expect": "picks", "first": "speaking_LadderFestivals"},
+    {"id": "f-form4-speaking-mixed", "text": "Form 4 口說", "lang": "zh", "expect": "picks", "mainAnyOf": ["speaking_LadderTalk", "speaking_QuickFireFlashcards"]},
+    {"id": "f-form4-speaking-mixed-en", "text": "中四 speaking", "lang": "zh", "expect": "picks", "mainAnyOf": ["speaking_LadderTalk", "speaking_QuickFireFlashcards"]},
+    {"id": "f-form4-speaking-en", "text": "Form 4 student speaking, 45 minutes", "lang": "en", "expect": "picks", "mainAnyOf": ["speaking_LadderTalk", "speaking_QuickFireFlashcards"]},
+    {"id": "f-form4-midautumn-zh", "text": "Form 4 中秋節口說", "lang": "zh", "expect": "picks", "anyOf": ["speaking_FestivalSentenceBuilder"], "mainAnyOf": ["speaking_LadderFestivals", "speaking_FestivalSentenceBuilder"]}
   ],
   "pairs": [
     ["Form 4 student speaking", "中四學生 口說"],
@@ -229,6 +237,7 @@
     ["listening for 9 year olds 40 minutes", "9歲 聆聽 40分鐘"],
     ["New Year games for 8 year olds", "8歲 新年 遊戲"],
     ["job interview practice for adults", "成人 工作面試 練習"],
-    ["8 year olds grammar and vocabulary", "8歲 文法 生字"]
+    ["8 year olds grammar and vocabulary", "8歲 文法 生字"],
+    ["Halloween activity for kids", "萬聖節 小朋友 活動"]
   ]
 }

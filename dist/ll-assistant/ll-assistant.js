@@ -322,14 +322,23 @@
     // festivals (C3): each one is also "festival"
     ['festival', 'festival festivals', '節日 節慶 應節 過節'],
     ['christmas', 'christmas xmas', '聖誕 聖誕節', ['festival']],
-    ['halloween', 'halloween', '萬聖節', ['festival']],
+    ['halloween', 'halloween', '萬聖節 萬聖', ['festival']],
     ['easter', 'easter', '復活節', ['festival']],
     ['midautumn', 'mid-autumn mooncake mooncakes', '中秋 中秋節 月餅', ['festival']],
     ['newyear', 'cny', '新年 農曆新年 過年 春節', ['festival']],
     ['bonfire', 'bonfire', '篝火之夜', ['festival']],
   ];
   // Two-word English names, read from the text before it is split into words.
-  var CONCEPT_PHRASES = [[/\b(?:(?:chinese|lunar)\s+)?new\s+year\b(?!\s*\d)/, 'newyear'], [/\bmid[\s-]autumn\b/, 'midautumn']];
+  // Their words are not matched one by one as well ("trick", "treat", "chinese").
+  var CONCEPT_PHRASES = [[/\b(?:(?:chinese|lunar)\s+)?new\s+year\b(?!\s*\d)/g, 'newyear'], [/\bmid[\s-]autumn\b/g, 'midautumn'], [/\btrick[\s-]+or[\s-]+treat(?:ing|s)?\b/g, 'halloween']];
+  // The words of every phrase in the text, to leave out of single-word matching.
+  function phraseWords(text) {
+    var out = Object.create(null);
+    CONCEPT_PHRASES.forEach(function (p) {
+      (text.match(p[0]) || []).forEach(function (m) { tokens(m).forEach(function (w) { out[norm(w)] = true; }); });
+    });
+    return out;
+  }
   // A Chinese word inside a longer word with another meaning does not count:
   // 新年度 is a new school or business year, 超過年半 is "over a year and a half".
   // [characters that may not come before it, characters that may not follow it]
@@ -651,7 +660,7 @@
     var reading = Object.keys(READING_EN).some(function (w) { return tokSet[w]; }) || readingZh(raw);
 
     // What the message is about, as language-free groups (CONCEPTS), for scoring.
-    var cset = Object.create(null), skip = Object.create(null);
+    var cset = Object.create(null), skip = phraseWords(scoreText);
     toks.forEach(function (w) {
       w = norm(w);
       var c = conceptOf(w);
@@ -663,7 +672,7 @@
       if (c) addConcept(cset, c); else if (!STOP[w] && !skip[w]) cset['w:' + w] = true;
     });
     var phraseTopic = false;
-    CONCEPT_PHRASES.forEach(function (p) { if (p[0].test(scoreText)) { addConcept(cset, p[1]); phraseTopic = true; } });
+    CONCEPT_PHRASES.forEach(function (p) { if (scoreText.match(p[0])) { addConcept(cset, p[1]); phraseTopic = true; } });
     ZH_CONCEPT_WORDS.forEach(function (w) { if (zhHas(scoreText, w)) addConcept(cset, CONCEPT_ZH[w]); });
     grades.forEach(function (c) { addConcept(cset, c); });
 
@@ -738,12 +747,16 @@
 
   function indexGame(g) {
     if (g._ix) return g._ix;
-    var kwEn = [], kwZh = [], en = [], zh = [];
+    var kwEn = [], kwZh = [], en = [], zh = [], kwLow = String(g.kw || '').toLowerCase();
+    // A keyword phrase ("trick or treat") is one keyword of its group, not three words.
+    var inPhrase = phraseWords(kwLow), phraseKeys = [];
+    CONCEPT_PHRASES.forEach(function (p) { if (kwLow.match(p[0])) phraseKeys.push(p[1]); });
     String(g.kw || '').split(/\s+/).forEach(function (t) {
       if (!t) return;
       if (CJK.test(t)) { if (t.length >= 2) { kwZh.push(t); zh.push(t); } }
       else {
         var skip = Object.create(null);
+        for (var pw in inPhrase) skip[pw] = true;
         tokens(t).forEach(function (w) {
           w = norm(w);
           if (!STOP[w] && w.length >= 2) kwEn.push(w);
@@ -756,6 +769,7 @@
     // One entry per meaning: "speaking" and 口說 in the same game are one keyword.
     // English keywords first, then Chinese, as written in the catalogue.
     var kw = [], seen = Object.create(null);
+    phraseKeys.forEach(function (key) { if (!seen[key]) { seen[key] = true; kw.push({ key: key, zh: null, grade: false, aud: false }); } });
     en.concat(zh).forEach(function (w) {
       var zhTerm = CJK.test(w), c = conceptOf(w) || (zhTerm ? zhConceptIn(w) : null);
       var key = c || (zhTerm ? 'z:' : 'w:') + w;
@@ -1135,7 +1149,7 @@
     if (q.hasAge || q.hasLevel || q.skills.length || q.reading) return false;
     if (NOT_FOLLOW_RE.test(q.low)) return false;
     // "New Year activity" is a festival, not "something new".
-    if (CONCEPT_PHRASES.some(function (p) { return p[0].test(q.low); })) return false;
+    if (CONCEPT_PHRASES.some(function (p) { return !!q.low.match(p[0]); })) return false;
     var zhHit = FOLLOW_ZH.some(function (w) { return q.low.indexOf(w) >= 0; });
     if (!FOLLOW_EN_RE.test(q.low) && !zhHit) return false;
     if (q.rest.some(function (t) { return !FOLLOW_EN[t]; })) return false;
@@ -1598,6 +1612,13 @@
     return lists.every(function (l) { return l && l.join('|') === first.join('|'); }) ? first : null;
   }
   function itemTier(cat, it) { return cat.byId[itemIds(it)[0]].tier; }
+  // Festival games (Ladder Festivals, Festival Speaking Builder): their keywords are
+  // about festivals. Without a festival in the question (a festival's name, or
+  // 節日/festival) they are never a step of the plan, only one of "Other games that fit".
+  var FESTIVAL_KEYS = toSet(['festival'].concat(CONCEPTS.filter(function (c) { return c[3] && c[3].indexOf('festival') >= 0; }).map(function (c) { return c[0]; })));
+  function festivalGame(cat, it) {
+    return itemIds(it).every(function (id) { return indexGame(cat.byId[id]).kw.some(function (k) { return FESTIVAL_KEYS[k.key]; }); });
+  }
   function itemKid(cat, it) { return itemIds(it).every(function (id) { return cat.byId[id].kid; }); }
 
   // The plan for an answer (1.2): Main is the game with the highest score after
@@ -1613,33 +1634,41 @@
     };
     var ranked = res.items.map(function (it, i) { return { it: it, s: score(it), i: i }; })
       .sort(function (a, b) { return b.s - a.s || a.i - b.i; });
-    var main = (q.adultSignal && ranked.filter(function (x) { return !itemKid(cat, x.it); })[0]) || ranked[0];
+    var older = !!q.adultSignal, noFest = !(q.cset && q.cset.festival);
+    var minutes = q.minutes == null ? null : q.minutes, kidNote = !!res.kidNote;
+    var kid = function (x) { return itemKid(cat, x.it); };
+    var fest = function (x) { return festivalGame(cat, x.it); };
+    // Main: the highest score that is not kid-themed (for an older learner) and
+    // not a festival game when the question names no festival.
+    var main = ranked.filter(function (x) { return !(older && kid(x)) && !(noFest && fest(x)); })[0] ||
+      (older && ranked.filter(function (x) { return !kid(x); })[0]) || ranked[0];
     var rest = ranked.filter(function (x) { return x !== main; });
-    var kind = partsOf(cat, main.it) ? 'single' : 'multi';
-    var order;
-    if (kind === 'single') {
+    var its = function (list) { return list.map(function (x) { return x.it; }); };
+    if (partsOf(cat, main.it)) {
       // Other games that fit (1.11): free first, then by score.
-      order = [main.it].concat(rest.slice().sort(function (a, b) {
+      return assemblePlan(cat, 'single', [main.it].concat(its(rest.slice().sort(function (a, b) {
         return (itemTier(cat, b.it) === 'free') - (itemTier(cat, a.it) === 'free') || b.s - a.s || a.i - b.i;
-      }).map(function (x) { return x.it; }));
-    } else {
-      // For a teen, adult, exam or business question a kid-themed game is never
-      // the first card (A2): it is not the warm-up, and when only kid-themed
-      // games are left besides Main, they go under "Other games that fit".
-      var older = !!q.adultSignal;
-      var pool = older ? rest.filter(function (x) { return !itemKid(cat, x.it); }) : rest;
-      var warm = pool.filter(function (x) { return itemTier(cat, x.it) === 'free'; })[0] || pool[0];
-      var wrap = rest.filter(function (x) { return x !== warm; })[0];
-      if (older && !warm) return oneStepPlan(cat, [main.it].concat(rest.map(function (x) { return x.it; })), q.minutes == null ? null : q.minutes, !!res.kidNote);
-      order = [warm, main, wrap].filter(Boolean).map(function (x) { return x.it; });
+      }))), minutes, kidNote);
     }
-    return assemblePlan(cat, kind, order, q.minutes == null ? null : q.minutes, !!res.kidNote);
+    // A festival game without a festival in the question is never a step, only
+    // one of "Other games that fit".
+    var festOut = noFest ? rest.filter(fest) : [];
+    var inPlan = rest.filter(function (x) { return festOut.indexOf(x) < 0; });
+    // For a teen, adult, exam or business question a kid-themed game is never
+    // the first card (A2): it is not the warm-up, and when only kid-themed
+    // games are left besides Main, Main is the one step and they follow it.
+    var pool = older ? inPlan.filter(function (x) { return !kid(x); }) : inPlan;
+    var warm = pool.filter(function (x) { return itemTier(cat, x.it) === 'free'; })[0] || pool[0];
+    if (!warm) return assemblePlan(cat, 'multi', [main.it], minutes, kidNote, its(inPlan.concat(festOut)));
+    var wrap = inPlan.filter(function (x) { return x !== warm; })[0];
+    return assemblePlan(cat, 'multi', its([warm, main, wrap].filter(Boolean)), minutes, kidNote, its(festOut));
   }
 
   // Steps, minutes and "Other games that fit" from games already in plan order.
   // Used for a new answer and for a plan opened from a link.
-  function assemblePlan(cat, kind, order, minutes, kidNote) {
-    var plan = { kind: kind, minutes: minutes, order: order.slice(0, 3), steps: [], others: [], kidNote: kidNote };
+  // extra: games shown only under "Other games that fit" in a multi-game plan.
+  function assemblePlan(cat, kind, order, minutes, kidNote, extra) {
+    var plan = { kind: kind, minutes: minutes, order: order.slice(0, 3), extra: (extra || []).slice(0, 2), steps: [], others: [], kidNote: kidNote };
     if (kind === 'single') {
       var split = partMinutes(minutes, partsOf(cat, order[0]));
       plan.item = order[0];
@@ -1653,17 +1682,7 @@
     while (steps.length > 1 && minutes != null && !multiMinutes(minutes, steps.length)) dropped.unshift(steps.splice(steps.length === 3 ? 2 : 0, 1)[0]);
     var mins = multiMinutes(minutes, steps.length), roles = ROLES[steps.length];
     plan.steps = steps.map(function (it, i) { return { role: roles[i], item: it, min: mins ? mins[i] : null }; });
-    plan.others = dropped;
-    return plan;
-  }
-
-  // Main as the only step, the other games under "Other games that fit" (the
-  // link marker "o": one step, then the others).
-  function oneStepPlan(cat, order, minutes, kidNote) {
-    var plan = assemblePlan(cat, 'multi', order.slice(0, 1), minutes, kidNote);
-    plan.others = order.slice(1, 3);
-    plan.order = order.slice(0, 3);
-    plan.oneStep = true;
+    plan.others = dropped.concat(plan.extra);
     return plan;
   }
 
@@ -1688,16 +1707,19 @@
 
   // ---------- the plan link (Feature 2) ----------
   // location.origin + "/library#llplan=" + a code with only: a one-letter
-  // marker (s single-game, m multi-game, o one game then "Other games that
-  // fit"), the lesson length, the language, and the game ids in step order
-  // ("m30e.phonics_LadderPhonics.phonics_SoundCatcher"). Levels of one family
-  // card are joined with "~". Nothing the teacher typed except the length.
-  var PLAN_HEAD = /^([mso])(\d{1,4})?([ez])$/;
+  // marker (s single-game, m multi-game), the lesson length, the language, and
+  // the game ids in step order ("m30e.phonics_LadderPhonics.phonics_SoundCatcher").
+  // In a multi-game plan, games shown only under "Other games that fit" follow
+  // two dots ("m30e.a.b..c"); a single-game plan's other games follow the game.
+  // Levels of one family card are joined with "~". Nothing the teacher typed
+  // except the length.
+  var PLAN_HEAD = /^([ms])(\d{1,4})?([ez])$/;
   var ID_RE = /^[A-Za-z0-9_]{1,80}$/;
   function planCode(plan, lang) {
-    var ids = (plan.kind === 'single' ? [plan.item].concat(plan.others) : plan.order).map(function (it) { return itemIds(it).join('~'); });
+    var code = function (list) { return list.map(function (it) { return itemIds(it).join('~'); }).join('.'); };
+    var ids = plan.kind === 'single' ? code([plan.item].concat(plan.others)) : code(plan.order) + (plan.extra && plan.extra.length ? '..' + code(plan.extra) : '');
     var m = plan.minutes != null && plan.minutes >= 1 && plan.minutes <= 9999 ? plan.minutes : '';
-    return (plan.kind === 'single' ? 's' : plan.oneStep ? 'o' : 'm') + m + (lang === 'zh' ? 'z' : 'e') + '.' + ids.join('.');
+    return (plan.kind === 'single' ? 's' : 'm') + m + (lang === 'zh' ? 'z' : 'e') + '.' + ids;
   }
   function planLink(origin, plan, lang) { return origin + '/library#llplan=' + planCode(plan, lang); }
 
@@ -1706,30 +1728,40 @@
     var parts = String(code || '').slice(0, 1200).split('.');
     var head = PLAN_HEAD.exec(parts.shift() || '');
     if (!head) return null;
-    var seen = Object.create(null), order = [];
-    parts.forEach(function (p) {
-      var ids = p.split('~').filter(function (id) { return ID_RE.test(id) && cat.byId[id] && !seen[id]; });
-      if (!ids.length) return;
-      ids.forEach(function (id) { seen[id] = true; });
-      var f = familyOf(cat.byId[ids[0]]);
-      var same = f && ids.every(function (id) { return familyOf(cat.byId[id]) === f; });
-      if (same && ids.length > 1) order.push({ family: f, ids: ids });
-      else ids.forEach(function (id) { order.push({ id: id }); });
-    });
-    order = order.slice(0, 3);
+    var seen = Object.create(null);
+    var items = function (list) {
+      var out = [];
+      list.forEach(function (p) {
+        var ids = p.split('~').filter(function (id) { return ID_RE.test(id) && cat.byId[id] && !seen[id]; });
+        if (!ids.length) return;
+        ids.forEach(function (id) { seen[id] = true; });
+        var f = familyOf(cat.byId[ids[0]]);
+        var same = f && ids.every(function (id) { return familyOf(cat.byId[id]) === f; });
+        if (same && ids.length > 1) out.push({ family: f, ids: ids });
+        else ids.forEach(function (id) { out.push({ id: id }); });
+      });
+      return out;
+    };
+    // Steps, then (after two dots) the games shown only under "Other games that fit".
+    var sep = parts.indexOf('');
+    var order = items(sep >= 0 ? parts.slice(0, sep) : parts).slice(0, 3);
+    var extra = items(sep >= 0 ? parts.slice(sep + 1) : []).slice(0, 2);
+    if (!order.length && extra.length) order.push(extra.shift());
     if (!order.length) return null;
+    if (head[1] === 's') { order = order.concat(extra).slice(0, 3); extra = []; }
     var minutes = head[2] && Number(head[2]) >= 1 ? Number(head[2]) : null;
     // A single-game plan needs a game with parts first; otherwise it is shown as a list.
     var kind = head[1] === 's' && partsOf(cat, order[0]) ? 'single' : 'multi';
     // Kid-themed tags and note, from the catalogue: a plan that mixes kid-themed
     // games with others was made for older learners, so the kid-themed ones are
     // tagged, and the note shows when their skill has nothing for older learners.
-    var kids = order.filter(function (it) { return itemKid(cat, it); });
-    var mixed = kids.length && kids.length < order.length;
+    var all = order.concat(extra);
+    var kids = all.filter(function (it) { return itemKid(cat, it); });
+    var mixed = kids.length && kids.length < all.length;
     if (mixed) kids.forEach(function (it) { it.kid = true; });
     var skill = mixed && cat.byId[itemIds(kids[0])[0]].skill;
     var kidNote = !!mixed && !cat.games.some(function (g) { return g.skill === skill && !g.kid; });
-    var plan = head[1] === 'o' ? oneStepPlan(cat, order, minutes, kidNote) : assemblePlan(cat, kind, order, minutes, kidNote);
+    var plan = assemblePlan(cat, kind, order, minutes, kidNote, extra);
     plan.lang = head[3] === 'z' ? 'zh' : 'en';
     return plan;
   }
