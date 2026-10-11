@@ -317,6 +317,7 @@
     ['easter', 'easter', '復活節', ['festival']],
     ['midautumn', 'mid-autumn mooncake mooncakes', '中秋 中秋節 月餅', ['festival']],
     ['newyear', 'cny', '新年 農曆新年 過年 春節', ['festival']],
+    ['newyearsday', '', '元旦', ['festival']],
     ['bonfire', 'bonfire', '篝火之夜', ['festival']],
     // Festival Speaking Builder's menu (owner, round 8): Thanksgiving, Mother's Day,
     // Father's Day and Dragon Boat Festival. Valentine's Day is on no game's list.
@@ -325,15 +326,27 @@
     ['fathersday', '', '父親節', ['festival']],
     ['dragonboat', '', '端午 端午節 龍舟', ['festival']],
     ['valentine', 'valentine valentines', '情人節', ['festival']],
+    // Festivals on no game's list (round 8 review), and any other "… festival".
+    ['chungyeung', '', '重陽 重陽節', ['festival']],
+    ['chingming', '', '清明 清明節', ['festival']],
+    ['lanternfestival', '', '元宵 元宵節', ['festival']],
+    ['buddhasbirthday', '', '佛誕', ['festival']],
+    ['diwali', 'diwali deepavali', '', ['festival']],
+    ['hanukkah', 'hanukkah chanukah', '', ['festival']],
+    ['ramadan', 'ramadan eid', '', ['festival']],
+    ['songkran', 'songkran', '', ['festival']],
+    ['otherfestival', '', '', ['festival']],
   ];
   // Two-word English names, read from the text before it is split into words.
   // Their words are not matched one by one as well ("trick", "treat", "chinese").
-  var CONCEPT_PHRASES = [[/\b(?:(?:chinese|lunar)\s+)?new\s+year\b(?!\s*\d)/g, 'newyear'], [/\bnew\s+year['\u2019]?s\s+day\b/g, 'newyear'],
+  var CONCEPT_PHRASES = [[/\b(?:(?:chinese|lunar)\s+)?new\s+year\b(?!\s*\d)(?!['\u2019]?s\s+day)/g, 'newyear'], [/\bspring\s+festival\b/g, 'newyear'],
+    [/\bnew\s+year['\u2019]?s\s+day\b/g, 'newyearsday'], [/\btuen\s+ng\b/g, 'dragonboat'], [/\bchung\s+yeung\b/g, 'chungyeung'],
+    [/\bching\s+ming\b/g, 'chingming'], [/\blantern\s+festival\b/g, 'lanternfestival'], [/\bbuddha['\u2019]?s\s+birthday\b/g, 'buddhasbirthday'],
     [/\bmid[\s-]autumn\b/g, 'midautumn'], [/\btrick[\s-]+or[\s-]+treat(?:ing|s)?\b/g, 'halloween'], [/\bbonfire\s+night\b/g, 'bonfire'],
     [/\bmother['\u2019]?s['\u2019]?\s+day\b/g, 'mothersday'], [/\bfather['\u2019]?s['\u2019]?\s+day\b/g, 'fathersday'],
     [/\bdragon[\s-]+boat\b/g, 'dragonboat'], [/\bvalentine['\u2019]?s['\u2019]?\s+day\b/g, 'valentine'],
     // "warm up" written as two words is "warm-up" (round 8).
-    [/\bwarm\s+up\b/g, 'warmup']];
+    [/\bwarm\s+ups?\b/g, 'warmup']];
   // The words of every phrase in the text, to leave out of single-word matching.
   function phraseWords(text) {
     var out = Object.create(null);
@@ -356,11 +369,13 @@
   }
   // Groups that say who the lesson is for, and school stages: like AUDIENCE and GRADE_KW.
   var AUD_CONCEPT = toSet(['adult', 'kid', 'teen', 'student', 'beginner']);
+  // A word group that is a festival's name (it implies "festival").
+  function FESTIVAL_NAME_KEY(c) { return !!(IMPLIES[c] && IMPLIES[c].indexOf('festival') >= 0); }
   var GRADE_CONCEPT = toSet(['secondary', 'primary']);
   var CONCEPT_EN = Object.create(null), CONCEPT_ZH = Object.create(null), IMPLIES = Object.create(null);
   CONCEPTS.forEach(function (c) {
     c[1].split(' ').forEach(function (w) { if (w) CONCEPT_EN[norm(w)] = c[0]; });
-    c[2].split(' ').forEach(function (w) { CONCEPT_ZH[w] = c[0]; });
+    c[2].split(' ').forEach(function (w) { if (w) CONCEPT_ZH[w] = c[0]; });
     if (c[3]) IMPLIES[c[0]] = c[3];
   });
   var ZH_CONCEPT_WORDS = Object.keys(CONCEPT_ZH);
@@ -640,13 +655,22 @@
 
     var toks = tokens(scoreText);
     var tokSet = toSet(toks.map(norm));
-    var skills = [], zhSkillWords = [], weakWords = [];
+    var skills = [], zhSkillWords = [], weakWords = [], spacedSkills = [];
     Object.keys(SKILL_WORDS).forEach(function (id) {
-      var en = SKILL_WORDS[id].en.split(' '), zh = SKILL_WORDS[id].zh.split(' '), words = [], strong = false;
-      // A hyphenated skill word also counts written with a space ("warm up", "real life").
-      for (var i = 0; i < en.length; i++) if (tokSet[norm(en[i])] || (en[i].indexOf('-') > 0 && (low.indexOf(en[i]) >= 0 || new RegExp('\\b' + en[i].replace(/-/g, '\\s+') + '\\b').test(low)))) { words.push(norm(en[i])); if (!WEAK_SKILL[norm(en[i])]) strong = true; }
-      for (var j = 0; j < zh.length; j++) if (raw.indexOf(zh[j]) >= 0) { strong = true; zhSkillWords.push(zh[j]); }
+      var en = SKILL_WORDS[id].en.split(' '), zh = SKILL_WORDS[id].zh.split(' '), words = [], strong = false, spacedOnly = true;
+      for (var i = 0; i < en.length; i++) {
+        var direct = tokSet[norm(en[i])] || (en[i].indexOf('-') > 0 && low.indexOf(en[i]) >= 0);
+        // A hyphenated skill word also counts written with a space ("warm up", "warm ups", "real life").
+        var spaced = !direct && en[i].indexOf('-') > 0 && new RegExp('\\b' + en[i].replace(/-/g, '\\s+') + 's?\\b').test(low);
+        if (!direct && !spaced) continue;
+        if (direct) spacedOnly = false;
+        words.push(norm(en[i])); if (!WEAK_SKILL[norm(en[i])]) strong = true;
+      }
+      for (var j = 0; j < zh.length; j++) if (raw.indexOf(zh[j]) >= 0) { strong = true; spacedOnly = false; zhSkillWords.push(zh[j]); }
       if (words.length || strong) skills.push({ id: id, strong: strong, words: words });
+      // "warm up" is also an everyday verb (warm up at the gym, warm up soup): on its
+      // own it does not make a message a teaching request.
+      if ((words.length || strong) && spacedOnly) spacedSkills.push(id);
     });
     // "Let's talk", "a few words", "quick question" next to a real request
     // ("needs grammar"): the everyday words are not a skill or a topic.
@@ -685,6 +709,12 @@
     });
     var phraseTopic = false;
     CONCEPT_PHRASES.forEach(function (p) { if (scoreText.match(p[0])) { addConcept(cset, p[1]); phraseTopic = true; } });
+    // "Hungry Ghost Festival", "Diwali festival": a festival's name we have no word
+    // group for is still a named festival, so a game's festival list must have it.
+    (scoreText.match(/\b[a-z][a-z'\u2019-]*\s+festivals?\b/g) || []).forEach(function (m) {
+      var w = norm(tokens(m)[0] || ''), c = conceptOf(w);
+      if (w && !STOP[w] && !TEACH_EN[w] && !skip[w] && !(c && FESTIVAL_NAME_KEY(c))) addConcept(cset, 'otherfestival');
+    });
     ZH_CONCEPT_WORDS.forEach(function (w) { if (zhHas(scoreText, w)) addConcept(cset, CONCEPT_ZH[w]); });
     grades.forEach(function (c) { addConcept(cset, c); });
 
@@ -697,7 +727,7 @@
     var exam = /\b(?:exams?|test[\s-]?prep|ket|fce|cae|cpe)\b|考試|應考|測驗/i.test(low);
     var adultSignal = older || ((business || exam) && !(age && age.max < 13));
     // An exam named, for the exam-game filter: exam words, or an exam's name.
-    var examAsked = exam || /\b(?:hkdse|dse|ielts|toefl|toeic|cambridge|yle)\b|雅思|口試|文憑試/i.test(raw);
+    var examAsked = exam || /\b(?:examinations?|tests?|mock|hkdse|dse|ielts|toefl|toeic|cambridge|yle|pet|cue\s*cards?)\b|雅思|口試|文憑試|模擬試|測驗|考試/i.test(raw);
 
     // A5: nothing left but teaching words?
     var rest = tokens(work.replace(WHICH_LESSON, ' $2 ')).map(norm).filter(function (t) { return !STOP[t] && !TEACH_EN[t] && !/^\d+$/.test(t); });
@@ -718,6 +748,7 @@
       hasLevel: levelList.length > 0,
       skills: skills,
       namedSkills: namedSkills,
+      spacedSkills: spacedSkills,
       zhSkillWords: zhSkillWords,
       reading: reading,
       minutes: minutes,
@@ -784,7 +815,8 @@
         for (var pw in inPhrase) skip[pw] = true;
         tokens(t).forEach(function (w) {
           w = norm(w);
-          if (!STOP[w] && w.length >= 2) kwEn.push(w);
+          // "father" in "Father's Day" is not a keyword of its own (food english for fathers).
+          if (!STOP[w] && w.length >= 2 && !(inPhrase[w] && !conceptOf(w))) kwEn.push(w);
           if (conceptOf(w) && w.indexOf('-') > 0) w.split('-').forEach(function (p) { skip[norm(p)] = true; });
           if (skip[w]) return;
           if (conceptOf(w) || (!STOP[w] && w.length >= 2)) en.push(w);
@@ -827,7 +859,8 @@
       kw += 3;
       if (!k.aud) topic += 3;
     }
-    for (i = 0; i < ix.titleKeys.length; i++) if (q.cset[ix.titleKeys[i]]) { kw += 2; topic += 2; }
+    // A title word is a topic match, unless it only says who the game is for ("Kids' Toy Shop").
+    for (i = 0; i < ix.titleKeys.length; i++) if (q.cset[ix.titleKeys[i]]) { kw += 2; if (!AUD_CONCEPT[ix.titleKeys[i]]) topic += 2; }
     var s = kw, d = 0;
     for (var t in q.cset) if (ix.descKeys[t] && d < 3) { s += 1; d++; }
     if (q.skills.indexOf(g.skill) >= 0) s += 5;
@@ -1010,13 +1043,15 @@
 
     trim(N.max);
     // A festival named: at least one festival game that lists it is in the
-    // cards, in place of the last card that is not part of the lead, so a
-    // skill's games or the model's picks never push them all out (round 8).
+    // cards, in place of the last card that is not part of the lead, so the
+    // model's picks or a skill's extra games never push them all out (round 8).
+    // The one game of each skill named (several skills) is never replaced.
     if (q.cset && q.cset.festival && !items.some(function (it) { return festivalGame(ctx.cat, it); })) {
       var fx = ctx.scored.filter(function (x) { return festivalGame(ctx.cat, { id: x.g.id }) && !(q.adultSignal && x.g.kid); })[0];
+      var keep = (lead || []).concat(ctx.facetIds || []);
       if (fx) {
         for (var j = items.length - 1; j >= 0 && items.length >= N.max; j--) {
-          if (!lead || !itemIds(items[j]).some(function (id) { return lead.indexOf(id) >= 0; })) items.splice(j, 1);
+          if (!itemIds(items[j]).some(function (id) { return keep.indexOf(id) >= 0; })) items.splice(j, 1);
         }
         if (items.length < N.max) items.push({ id: fx.g.id });
       }
@@ -1109,8 +1144,11 @@
     }
     var fin = finalize(ctx, start);
     if (!fin.items.length) return withCtx(result(q, { kind: 'none' }), ctx);
-    // AI mode keeps the keyword lead; with several skills named, every skill's game.
-    ctx.lead = ctx.facetIds && ctx.facetIds.length >= 2 ? ctx.facetIds.slice() : keywordLead(ctx, fin.items);
+    // AI mode keeps the keyword lead; with several skills named, every skill's game
+    // and the answer's festival games (round 8).
+    ctx.lead = ctx.facetIds && ctx.facetIds.length >= 2
+      ? ctx.facetIds.concat(fin.items.filter(function (it) { return festivalGame(cat, it) && ctx.facetIds.indexOf(itemIds(it)[0]) < 0; }).map(function (it) { return itemIds(it)[0]; }))
+      : keywordLead(ctx, fin.items);
     // AI mode tops up from this answer when it drops a model pick.
     ctx.kwIds = fin.items.map(function (it) { return itemIds(it)[0]; });
     return withCtx(result(q, { kind: 'picks', items: fin.items, kidNote: fin.kidNote, narrow: !q.hasAge && !q.hasLevel }), ctx);
@@ -1196,7 +1234,9 @@
     });
     // A word of a CONCEPTS group (or one it implies) that some game has counts as a keyword.
     var known = function (c) { var set = Object.create(null); addConcept(set, c); return Object.keys(set).some(function (x) { return keys[x]; }); };
-    if (!q.rest.every(function (t) { return en[t] || (conceptOf(t) && known(conceptOf(t))); })) return false;
+    // A word of a phrase in the message ("trick or treat") counts when the phrase's group does.
+    var qPhrase = phraseWords(q.low), phraseKnown = CONCEPT_PHRASES.some(function (p) { return q.low.match(p[0]) && known(p[1]); });
+    if (!q.rest.every(function (t) { return en[t] || (qPhrase[t] && phraseKnown) || (conceptOf(t) && known(conceptOf(t))); })) return false;
     // Keywords first (自我介紹 contains the teaching word 介紹), then teaching words.
     var left = q.zhWork, zhTopic = false;
     zh.concat(ZH_CONCEPT_WORDS.filter(function (w) { return known(CONCEPT_ZH[w]); })).sort(function (a, b) { return b.length - a.length; }).forEach(function (t) {
@@ -1342,7 +1382,8 @@
   // learner word or teaching word) is off-topic, whatever keywords it hits:
   // "Book a meeting room in the office" stays the off-topic reply.
   function teachingRequest(q) {
-    return !!(q.skills.length || q.hasAge || q.hasLevel || q.minutes != null || q.reading ||
+    var spaced = q.spacedSkills || [];
+    return !!(q.skills.some(function (sk) { return spaced.indexOf(sk) < 0; }) || q.hasAge || q.hasLevel || q.minutes != null || q.reading ||
       TEACHING_CONTEXT.test(q.low) || audienceWord(q));
   }
 

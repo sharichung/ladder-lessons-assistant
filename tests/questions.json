@@ -232,6 +232,11 @@
     {"id": "s8-no-exam-en", "text": "speaking games", "lang": "en", "expect": "picks", "noneOf": ["speaking_IeltsSpeakingRoom"]},
     {"id": "s8-ielts-no-age-en", "text": "IELTS speaking", "lang": "en", "expect": "picks", "anyOf": ["speaking_IeltsSpeakingRoom"]},
     {"id": "s8-warm-up-space-en", "text": "warm up for adults", "lang": "en", "expect": "picks", "anyOf": ["speaking_QuickFireFlashcards"], "firstNotKid": true},
+    {"id": "s8-gym-warmup-en", "text": "I want to warm up at the gym", "lang": "en", "expect": "none"},
+    {"id": "s8-chungyeung-zh", "text": "重陽節 口說", "lang": "zh", "expect": "picks", "noneOf": ["speaking_FestivalSentenceBuilder", "speaking_LadderFestivals"]},
+    {"id": "s8-newyearsday-zh", "text": "元旦 口說", "lang": "zh", "expect": "picks", "mainAnyOf": ["speaking_FestivalSentenceBuilder"], "noneOf": ["speaking_LadderFestivals"]},
+    {"id": "s8-two-skills-christmas-en", "text": "Christmas grammar and vocabulary 20 minutes for 9 year olds", "lang": "en", "expect": "picks", "skillsFirst": ["grammar", "vocab"]},
+    {"id": "s8-oral-exam-en", "text": "oral examination practice", "lang": "en", "expect": "picks", "anyOf": ["speaking_IeltsSpeakingRoom"]},
     {"id": "s-adult-business-picks-en", "text": "adult business English, 45 minutes", "lang": "en", "expect": "picks", "anyOf": ["speaking_LadderTalk"], "noneOf": ["speaking_DoctorVisit"], "notFirst": ["finance_MiniBusinessTycoonJunior", "finance_MiniBusinessTycoonSuper"], "firstNotKid": true, "kidTagged": true, "kidNote": true}
   ],
   "pairs": [

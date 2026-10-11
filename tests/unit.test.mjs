@@ -634,10 +634,51 @@ test('round 8: Festival Speaking Builder\'s festival list, festival games kept, 
   for (const t of ['IELTS speaking', '雅思 口試', 'speaking exam practice', 'adult speaking', '成人學生，想練口語會話']) assert.ok(core.recommendRules(cat, t).ids.includes(IELTS), t);
   // Ladder Talk lists "exams" as a topic; it is not an exam game.
   assert.ok(core.recommendRules(cat, 'English for work').ids.includes('speaking_LadderTalk'));
-  // "warm up" is "warm-up".
-  for (const [a, b] of [['kids, warm up', 'kids, warm-up'], ['warm up for adults', 'warm-up for adults'], ['adult warm up, 45 min', 'adult warm-up, 45 min']]) {
+  // "warm up" is "warm-up" in a teaching request, and still an everyday verb elsewhere.
+  for (const [a, b] of [['kids, warm up', 'kids, warm-up'], ['warm up for adults', 'warm-up for adults'], ['adult warm up, 45 min', 'adult warm-up, 45 min'], ['warm ups for adults', 'warm-ups for adults']]) {
     assert.deepEqual(core.recommendRules(cat, a).ids, core.recommendRules(cat, b).ids, a);
   }
+  for (const t of ['I want to warm up at the gym', 'How do I warm up leftover pizza?', 'Will it warm up tomorrow in London?', 'my son is sick, how do I warm up his soup']) {
+    assert.equal(core.recommendRules(cat, t).kind, 'none', t);
+    let calls = 0;
+    await core.recommendAI(cat, { chat: () => { calls++; return Promise.resolve({ text: '{"picks":[]}', ms: 1 }); } }, t);
+    assert.equal(calls, 0, `${t}: never reaches the model`);
+  }
+});
+
+test('round 8 review: several skills with a festival, festivals on no list, New Year\'s Day, words inside festival names, titles that only name an audience, exam words', async () => {
+  const FSB = 'speaking_FestivalSentenceBuilder', LF = 'speaking_LadderFestivals', IELTS = 'speaking_IeltsSpeakingRoom';
+  const mainIn = (r) => mainOf(core.buildPlan(r, cat))[0];
+  const ai = (text, picks) => core.recommendAI(cat, reply((m, schema) => JSON.stringify({ picks: picks.filter((id) => enumOf(schema).includes(id)) })), text);
+  const skillOf = (r) => r.items.map((it) => cat.byId[(it.ids || [it.id])[0]].skill);
+  // Each skill named keeps its card; the festival game comes where there is room, the same in both modes.
+  for (const t of ['Christmas grammar and vocabulary 20 minutes for 9 year olds', '聖誕節 文法同生字 9歲 20分鐘']) {
+    const k = core.recommendRules(cat, t), a = await ai(t, [LF]);
+    assert.deepEqual(skillOf(k), ['grammar', 'vocab'], t);
+    assert.deepEqual(a.ids, k.ids, `AI = keyword: ${t}`);
+  }
+  const roomy = core.recommendRules(cat, 'Christmas grammar and vocabulary for 9 year olds, 45 min');
+  assert.ok(roomy.ids.includes(LF) && skillOf(roomy).includes('grammar') && skillOf(roomy).includes('vocab'));
+  assert.ok((await ai('Christmas grammar and vocabulary for 9 year olds, 45 min', ['vocab_FruitAtoZ'])).ids.includes(LF));
+  // A festival no game lists, named or only "… festival": neither festival game.
+  for (const t of ['Chung Yeung Festival speaking for 9 year olds', 'Diwali festival speaking', 'Hungry Ghost Festival speaking', '重陽節 口說', '清明節 口說']) {
+    const r = core.recommendRules(cat, t);
+    assert.ok(!r.ids.includes(FSB) && !r.ids.includes(LF), `${t}: ${r.ids}`);
+  }
+  // New Year's Day (元旦) is on Festival Speaking Builder's list only; Lunar New Year and plain 新年 on both.
+  for (const t of ["New Year's Day speaking", 'New Year’s Day speaking', '元旦 口說', 'Tuen Ng Festival speaking 9 year olds']) {
+    const r = core.recommendRules(cat, t);
+    assert.equal(mainIn(r), FSB, t);
+    assert.ok(!r.ids.includes(LF), t);
+  }
+  assert.equal(core.recommendRules(cat, '新年 小朋友 活動').ids[0], LF);
+  assert.equal(mainIn(core.recommendRules(cat, 'Spring Festival speaking')), FSB);
+  // "father" in "Father's Day" is not a keyword of its own.
+  assert.equal(core.recommendRules(cat, 'food english for fathers').kind, core.recommendRules(cat, 'food english for dads').kind);
+  // "Kids" in "Kids' Toy Shop" says who the game is for, not what it is about: a head count with an age is not a topic.
+  assert.ok((await ai('6 kids aged 9', ['finance_KidsToyShop', 'group_StudentPicker'])).ids.includes('group_StudentPicker'));
+  // Exam words: examination, test, 測驗, PET, cue card keep IELTS Speaking Room.
+  for (const t of ['oral examination', 'speaking test', '口語測驗', 'PET speaking practice', 'cue card practice']) assert.ok(core.recommendRules(cat, t).ids.includes(IELTS), t);
 });
 
 // ---------- plan link (Feature 2) ----------
