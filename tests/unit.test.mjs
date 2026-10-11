@@ -193,7 +193,12 @@ test('every word group gives the same skills in English and Chinese (C5)', () =>
 // C3: every festival a festival game names in English has a Chinese word, and that word finds the game.
 test('every festival named by a festival game has a Chinese keyword that finds it (C3)', () => {
   const NAMES = ['christmas', 'xmas', 'halloween', 'easter', 'mid-autumn', 'mooncake', 'chinese new year', 'lunar new year', 'new year',
-    'bonfire night', 'dragon boat', 'valentine', 'thanksgiving', 'diwali', 'ching ming', 'chung yeung', 'hanukkah', 'ramadan', 'eid', 'lantern festival'];
+    'bonfire night', 'dragon boat', 'valentine', 'thanksgiving', 'mother\'s day', 'father\'s day', 'diwali', 'ching ming', 'chung yeung', 'hanukkah', 'ramadan', 'eid', 'lantern festival'];
+  // The word group a festival name belongs to, as a question reads it ("dragon boat" is a phrase).
+  const groupOf = (name) => {
+    const key = Object.keys(core.parseQuery(name).cset).find((k) => k !== 'festival' && core.CONCEPTS.some((c) => c[0] === k && c[3] && c[3].includes('festival')));
+    return key ? core.CONCEPTS.find((c) => c[0] === key) : null;
+  };
   const festivalGames = cat.games.filter((g) => /\bfestival/i.test(g.kw + ' ' + g.title));
   assert.ok(festivalGames.length >= 2);
   let checked = 0;
@@ -202,7 +207,7 @@ test('every festival named by a festival game has a Chinese keyword that finds i
     for (const name of NAMES) {
       if (!new RegExp('\\b' + name.replace(/[- ]/g, '[\\s-]') + '\\b').test(text)) continue;
       checked++;
-      const group = name.includes('new year') ? core.CONCEPTS.find((c) => c[0] === 'newyear') : core.CONCEPTS.find((c) => c[1].split(' ').includes(name.split(' ')[0]));
+      const group = groupOf(name);
       assert.ok(group, `${g.id}: no word group for "${name}"`);
       const zhWords = group[2].split(' ').filter(Boolean);
       assert.ok(zhWords.length, `${g.id}: "${name}" has no Chinese keyword`);
@@ -552,10 +557,10 @@ test('round 7 review: the two rules stay inside their cases (festival with sever
   const talk = core.recommendRules(cat, "Let's talk about Christmas games for my 9 year olds");
   assert.deepEqual(talk.q.namedSkills, []);
   assert.equal(mainIn(talk), LF);
-  // Keyword mode outside festival + skill is as before round 7.
+  // Keyword mode outside festival + skill is as before round 7 ("warm up" is read as "warm-up" since round 8).
   assert.deepEqual(core.recommendRules(cat, 'kids animals, 45 min').ids, ['group_ZooDetective', 'group_Discussion']);
   assert.deepEqual(core.recommendRules(cat, 'kids email, 45 min').ids, ['writing_RolePlayWriting', 'writing_TowerOfSentences']);
-  assert.deepEqual(core.recommendRules(cat, 'adult warm up, 45 min').ids, ['tools_LadderWheel', 'tools_BigText']);
+  assert.deepEqual(core.recommendRules(cat, 'adult warm up, 45 min').ids, core.recommendRules(cat, 'adult warm-up, 45 min').ids);
   // A dropped pick does not come back through the extra games of a skill.
   for (const text of ['adult self introduction', '成人初學者 拼讀']) {
     const r = await ai(text, ['speaking_QuickFireFlashcards', 'speaking_DoctorVisit', 'speaking_HookLab']);
@@ -569,11 +574,70 @@ test('round 7 review: the two rules stay inside their cases (festival with sever
   // The keyword lead's kid-themed card and its note stay when the model fills every place.
   const lead = await ai('上班族 business english', ['speaking_LadderFrames', 'vocab_CommunityHelpers', 'speaking_LadderTalk']);
   assert.ok(lead.ids.includes('finance_MiniBusinessTycoonSuper') && lead.kidNote, lead.ids.join());
-  // Children: the off-topic rule and its top-up do not apply.
+  // A festival named: its festival game stays, whatever the model picks (round 8).
   assert.ok((await ai('8 year old Christmas vocabulary', ['vocab_Ladder_a1', 'vocab_Ladder_a2', 'vocab_Ladder_b1'])).ids.includes(LF));
   // "first lesson" is which lesson, not "first conditional" or "first sound".
   for (const text of ['adults, first lesson, 45 min', 'kids, first lesson', '8 year old, first lesson']) assert.equal(core.recommendRules(cat, text).askType, 'skill', text);
   assert.equal(core.recommendRules(cat, 'adults, first conditional').ids[0], 'grammar_ConditionalStudio');
+});
+
+test('round 8: Festival Speaking Builder\'s festival list, festival games kept, the off-topic rule for every age, no exam game without an age or exam word', async () => {
+  const FSB = 'speaking_FestivalSentenceBuilder', LF = 'speaking_LadderFestivals', IELTS = 'speaking_IeltsSpeakingRoom';
+  const mainIn = (r) => mainOf(core.buildPlan(r, cat))[0];
+  const ai = (text, picks) => core.recommendAI(cat, reply((m, schema) => JSON.stringify({ picks: picks.filter((id) => enumOf(schema).includes(id)) })), text);
+  // The owner's list from the game's menu is in the catalogue, word for word.
+  const MENU = ['Halloween', 'Bonfire Night', 'Thanksgiving', 'Christmas', "New Year's Day", 'Lunar New Year', "Mother's Day", 'Easter', 'Dragon Boat Festival', "Father's Day", 'Mid-Autumn Festival'];
+  for (const f of MENU) assert.ok(cat.byId[FSB].kw.includes(f), f);
+  // Each of them with a skill: Festival Speaking Builder is Main, in English and Chinese.
+  for (const t of MENU.map((f) => f + ' speaking').concat(['感恩節 口說', '母親節 口說', '父親節 口說', '端午節 口說', '萬聖節 口說'])) {
+    assert.equal(mainIn(core.recommendRules(cat, t)), FSB, t);
+  }
+  // A festival not on its list (Valentine's Day): Festival Speaking Builder is not Main, nor shown.
+  for (const t of ["Valentine's Day speaking", '情人節 口說', '8歲 情人節 口說']) {
+    const r = core.recommendRules(cat, t);
+    assert.notEqual(mainIn(r), FSB, t);
+    assert.ok(!r.ids.includes(FSB) && !r.ids.includes(LF), `${t}: ${r.ids}`);
+    assert.notEqual(mainIn(await ai(t, [FSB, LF, 'speaking_HookLab'])), FSB, `AI: ${t}`);
+  }
+  assert.equal(core.recommendRules(cat, '情人節 遊戲').kind, 'none');
+  // Thanksgiving is on Festival Speaking Builder's list only: Ladder Festivals is not shown.
+  assert.ok(!core.recommendRules(cat, 'Thanksgiving speaking').ids.includes(LF));
+  // The rule, not the names: take Halloween off the list and "Halloween speaking" falls back to Ladder Festivals.
+  const noHalloween = JSON.parse(JSON.stringify(compactRaw));
+  noHalloween.games.find((g) => g.id === FSB).kw = noHalloween.games.find((g) => g.id === FSB).kw.replace('Halloween ', '');
+  const cat4 = core.prepareCatalogue(noHalloween);
+  const h4 = core.recommendRules(cat4, 'Halloween speaking');
+  assert.equal(mainOf(core.buildPlan(h4, cat4))[0], LF);
+  assert.ok(!h4.ids.includes(FSB));
+  // The owner's failing run-3 question: the model picked no festival game, Ladder Festivals still shows.
+  const run3 = fixture('model-replies-third-run.json');
+  const hs = await core.recommendAI(cat, { chat: () => Promise.resolve({ text: run3['s-halloween-speaking-en'], ms: 1 }) }, 'Halloween speaking');
+  assert.ok(hs.ids.includes(LF) && hs.ids.includes(FSB), hs.ids.join());
+  // A festival with another skill: at least one festival game, in both modes; with no festival
+  // game for that skill, the general one is Main (the owner's round-7 rule).
+  for (const t of ['8 year old Christmas vocabulary', 'kids Halloween writing', '8歲 聖誕節 文法', '中秋節 生字 8歲']) {
+    const k = core.recommendRules(cat, t);
+    assert.ok(k.ids.includes(LF), `keyword: ${t}`);
+    assert.equal(mainIn(k), LF, `keyword Main: ${t}`);
+    assert.ok((await ai(t, ['vocab_Ladder_a1', 'writing_TowerOfSentences', 'grammar_TenseStudio', 'speaking_HookLab'])).ids.includes(LF), `AI: ${t}`);
+  }
+  // The off-topic rule for every age, and the keyword lead never lost.
+  for (const t of ['kids, doctor', '8 year old, business', 'P4, listening', 'kids, money, 45 min', '9歲 寫作']) {
+    const base = core.recommendRules(cat, t);
+    for (const picks of [['speaking_QuickFireFlashcards', 'speaking_DoctorVisit', 'speaking_HookLab'], ['phonics_SoundCatcher', 'phonics_WordSmash', 'grammar_QuestionMaster']]) {
+      const r = await ai(t, picks);
+      assert.ok(base.ctx.lead.every((id) => r.ids.includes(id)), `${t}: lead ${base.ctx.lead} in ${r.ids}`);
+    }
+  }
+  // No age and no exam word: no exam game. An age, or IELTS, 雅思, DSE, exam: as before.
+  for (const t of ['Halloween speaking', 'speaking', '口說', '佢學咗英文超過年半，想練口語', 'B2 speaking']) assert.ok(!core.recommendRules(cat, t).ids.includes(IELTS), t);
+  for (const t of ['IELTS speaking', '雅思 口試', 'speaking exam practice', 'adult speaking', '成人學生，想練口語會話']) assert.ok(core.recommendRules(cat, t).ids.includes(IELTS), t);
+  // Ladder Talk lists "exams" as a topic; it is not an exam game.
+  assert.ok(core.recommendRules(cat, 'English for work').ids.includes('speaking_LadderTalk'));
+  // "warm up" is "warm-up".
+  for (const [a, b] of [['kids, warm up', 'kids, warm-up'], ['warm up for adults', 'warm-up for adults'], ['adult warm up, 45 min', 'adult warm-up, 45 min']]) {
+    assert.deepEqual(core.recommendRules(cat, a).ids, core.recommendRules(cat, b).ids, a);
+  }
 });
 
 // ---------- plan link (Feature 2) ----------
@@ -658,7 +722,8 @@ const enumOf = (schema) => (schema.properties || schema.anyOf[0].properties).pic
 // 2026-10-11 (keyed by question id). Replaying them shows what the current
 // post-processing does with real model output, without a GPU.
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', name), 'utf8')).replies;
-const RUNS = [['2026-10-06', fixture('model-replies-2026-10-06.json'), (q) => q.text], ['2026-10-11', fixture('model-replies-2026-10-11.json'), (q) => q.id]];
+const RUNS = [['2026-10-06', fixture('model-replies-2026-10-06.json'), (q) => q.text], ['2026-10-11', fixture('model-replies-2026-10-11.json'), (q) => q.id],
+  ['third run', fixture('model-replies-third-run.json'), (q) => q.id]];
 
 for (const [day, recorded, keyOf] of RUNS) {
   test(`AI: the real model's recorded replies (${day}) pass every fixed question after post-processing`, async () => {
@@ -695,9 +760,13 @@ test('AI, round 7: for an adult with a topic, a model pick that matches only "ad
   // A pick that matches the topic stays: Ladder Talk for business English.
   const lt = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['speaking_LadderTalk', 'finance_YoungEntrepreneur'] })), 'Form 1 business english');
   assert.ok(lt.ids.includes('finance_YoungEntrepreneur'));
-  // Not for children: the rule is for teen, adult, exam and business questions only.
+  // Children too since round 8: "Age 8, phonics" drops Healthy Living Challenge. A pick
+  // that matches the topic by its keywords stays: Clinic Day's word cards for "new words",
+  // and Healthy Plate, a vocabulary game, for a vocabulary request made with an everyday word.
+  const ph8 = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['phonics_LadderPhonics', 'life_HealthyLiving', 'speaking_FullSentences'] })), 'Age 8, phonics, 30 min');
+  assert.ok(!ph8.ids.includes('life_HealthyLiving'), ph8.ids.join());
   const kid = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['vocab_Ladder_a1', 'vocab_HealthyPlate', 'speaking_DoctorVisit'] })), '8 year old, A1, wants to learn new words, 45 min');
-  assert.ok(kid.ids.includes('speaking_DoctorVisit'));
+  assert.deepEqual(kid.ids, ['vocab_Ladder_a1', 'vocab_HealthyPlate', 'speaking_DoctorVisit']);
 });
 
 test('AI: the keyword answer\'s lead stays first when the model drops or demotes it', async () => {

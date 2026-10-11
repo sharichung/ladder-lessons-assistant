@@ -218,11 +218,20 @@
     {"id": "f-form4-midautumn-zh", "text": "Form 4 中秋節口說", "lang": "zh", "expect": "picks", "anyOf": ["speaking_FestivalSentenceBuilder"], "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
     {"id": "s-form4-midautumn-en", "text": "Form 4 Mid-Autumn speaking", "lang": "en", "expect": "picks", "anyOf": ["speaking_FestivalSentenceBuilder"], "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
     {"id": "s-midautumn-game-zh", "text": "中秋節遊戲", "lang": "zh", "expect": "picks", "first": "speaking_LadderFestivals", "mainAnyOf": ["speaking_LadderFestivals"]},
-    {"id": "s-halloween-speaking-en", "text": "Halloween speaking", "lang": "en", "expect": "picks", "anyOf": ["speaking_LadderFestivals"], "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
+    {"id": "s-halloween-speaking-en", "text": "Halloween speaking", "lang": "en", "expect": "picks", "anyOf": ["speaking_LadderFestivals"], "mainAnyOf": ["speaking_FestivalSentenceBuilder"], "noneOf": ["speaking_IeltsSpeakingRoom"]},
     {"id": "s-midautumn-two-skills-zh", "text": "Form 4 中秋節口說同聆聽 20分鐘", "lang": "zh", "expect": "picks", "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
     {"id": "s-talk-christmas-en", "text": "Let's talk about Christmas games for my 9 year olds", "lang": "en", "expect": "picks", "first": "speaking_LadderFestivals", "mainAnyOf": ["speaking_LadderFestivals"]},
     {"id": "s-first-lesson-en", "text": "adults, first lesson, 45 min", "lang": "en", "expect": "ask-skill"},
     {"id": "s-first-lesson-grammar-en", "text": "kids first lesson, grammar", "lang": "en", "expect": "picks", "notFirst": ["grammar_ConditionalStudio"], "noneOf": ["grammar_ConditionalStudio"]},
+    {"id": "s8-thanksgiving-en", "text": "Thanksgiving speaking", "lang": "en", "expect": "picks", "mainAnyOf": ["speaking_FestivalSentenceBuilder"], "noneOf": ["speaking_LadderFestivals"]},
+    {"id": "s8-dragonboat-zh", "text": "端午節 口說", "lang": "zh", "expect": "picks", "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
+    {"id": "s8-valentine-speaking-en", "text": "Valentine's Day speaking", "lang": "en", "expect": "picks", "noneOf": ["speaking_FestivalSentenceBuilder", "speaking_LadderFestivals"]},
+    {"id": "s8-valentine-speaking-zh", "text": "情人節 口說", "lang": "zh", "expect": "picks", "noneOf": ["speaking_FestivalSentenceBuilder", "speaking_LadderFestivals"]},
+    {"id": "s8-valentine-games-zh", "text": "情人節 遊戲", "lang": "zh", "expect": "none"},
+    {"id": "s8-christmas-vocab-en", "text": "8 year old Christmas vocabulary", "lang": "en", "expect": "picks", "anyOf": ["speaking_LadderFestivals"]},
+    {"id": "s8-no-exam-en", "text": "speaking games", "lang": "en", "expect": "picks", "noneOf": ["speaking_IeltsSpeakingRoom"]},
+    {"id": "s8-ielts-no-age-en", "text": "IELTS speaking", "lang": "en", "expect": "picks", "anyOf": ["speaking_IeltsSpeakingRoom"]},
+    {"id": "s8-warm-up-space-en", "text": "warm up for adults", "lang": "en", "expect": "picks", "anyOf": ["speaking_QuickFireFlashcards"], "firstNotKid": true},
     {"id": "s-adult-business-picks-en", "text": "adult business English, 45 minutes", "lang": "en", "expect": "picks", "anyOf": ["speaking_LadderTalk"], "noneOf": ["speaking_DoctorVisit"], "notFirst": ["finance_MiniBusinessTycoonJunior", "finance_MiniBusinessTycoonSuper"], "firstNotKid": true, "kidTagged": true, "kidNote": true}
   ],
   "pairs": [
@@ -247,6 +256,8 @@
     ["job interview practice for adults", "成人 工作面試 練習"],
     ["8 year olds grammar and vocabulary", "8歲 文法 生字"],
     ["Halloween activity for kids", "萬聖節 小朋友 活動"],
-    ["Form 4 Mid-Autumn speaking", "Form 4 中秋節口說"]
+    ["Form 4 Mid-Autumn speaking", "Form 4 中秋節口說"],
+    ["Thanksgiving speaking", "感恩節 口說"],
+    ["Valentine's Day speaking", "情人節 口說"]
   ]
 }

@@ -318,10 +318,22 @@
     ['midautumn', 'mid-autumn mooncake mooncakes', '中秋 中秋節 月餅', ['festival']],
     ['newyear', 'cny', '新年 農曆新年 過年 春節', ['festival']],
     ['bonfire', 'bonfire', '篝火之夜', ['festival']],
+    // Festival Speaking Builder's menu (owner, round 8): Thanksgiving, Mother's Day,
+    // Father's Day and Dragon Boat Festival. Valentine's Day is on no game's list.
+    ['thanksgiving', 'thanksgiving', '感恩節', ['festival']],
+    ['mothersday', '', '母親節', ['festival']],
+    ['fathersday', '', '父親節', ['festival']],
+    ['dragonboat', '', '端午 端午節 龍舟', ['festival']],
+    ['valentine', 'valentine valentines', '情人節', ['festival']],
   ];
   // Two-word English names, read from the text before it is split into words.
   // Their words are not matched one by one as well ("trick", "treat", "chinese").
-  var CONCEPT_PHRASES = [[/\b(?:(?:chinese|lunar)\s+)?new\s+year\b(?!\s*\d)/g, 'newyear'], [/\bmid[\s-]autumn\b/g, 'midautumn'], [/\btrick[\s-]+or[\s-]+treat(?:ing|s)?\b/g, 'halloween']];
+  var CONCEPT_PHRASES = [[/\b(?:(?:chinese|lunar)\s+)?new\s+year\b(?!\s*\d)/g, 'newyear'], [/\bnew\s+year['\u2019]?s\s+day\b/g, 'newyear'],
+    [/\bmid[\s-]autumn\b/g, 'midautumn'], [/\btrick[\s-]+or[\s-]+treat(?:ing|s)?\b/g, 'halloween'], [/\bbonfire\s+night\b/g, 'bonfire'],
+    [/\bmother['\u2019]?s['\u2019]?\s+day\b/g, 'mothersday'], [/\bfather['\u2019]?s['\u2019]?\s+day\b/g, 'fathersday'],
+    [/\bdragon[\s-]+boat\b/g, 'dragonboat'], [/\bvalentine['\u2019]?s['\u2019]?\s+day\b/g, 'valentine'],
+    // "warm up" written as two words is "warm-up" (round 8).
+    [/\bwarm\s+up\b/g, 'warmup']];
   // The words of every phrase in the text, to leave out of single-word matching.
   function phraseWords(text) {
     var out = Object.create(null);
@@ -347,7 +359,7 @@
   var GRADE_CONCEPT = toSet(['secondary', 'primary']);
   var CONCEPT_EN = Object.create(null), CONCEPT_ZH = Object.create(null), IMPLIES = Object.create(null);
   CONCEPTS.forEach(function (c) {
-    c[1].split(' ').forEach(function (w) { CONCEPT_EN[norm(w)] = c[0]; });
+    c[1].split(' ').forEach(function (w) { if (w) CONCEPT_EN[norm(w)] = c[0]; });
     c[2].split(' ').forEach(function (w) { CONCEPT_ZH[w] = c[0]; });
     if (c[3]) IMPLIES[c[0]] = c[3];
   });
@@ -631,7 +643,8 @@
     var skills = [], zhSkillWords = [], weakWords = [];
     Object.keys(SKILL_WORDS).forEach(function (id) {
       var en = SKILL_WORDS[id].en.split(' '), zh = SKILL_WORDS[id].zh.split(' '), words = [], strong = false;
-      for (var i = 0; i < en.length; i++) if (tokSet[norm(en[i])] || (en[i].indexOf('-') > 0 && low.indexOf(en[i]) >= 0)) { words.push(norm(en[i])); if (!WEAK_SKILL[norm(en[i])]) strong = true; }
+      // A hyphenated skill word also counts written with a space ("warm up", "real life").
+      for (var i = 0; i < en.length; i++) if (tokSet[norm(en[i])] || (en[i].indexOf('-') > 0 && (low.indexOf(en[i]) >= 0 || new RegExp('\\b' + en[i].replace(/-/g, '\\s+') + '\\b').test(low)))) { words.push(norm(en[i])); if (!WEAK_SKILL[norm(en[i])]) strong = true; }
       for (var j = 0; j < zh.length; j++) if (raw.indexOf(zh[j]) >= 0) { strong = true; zhSkillWords.push(zh[j]); }
       if (words.length || strong) skills.push({ id: id, strong: strong, words: words });
     });
@@ -683,6 +696,8 @@
     // Exam preparation (spec 1.2): not for an age under 13 ("P3 exam" is a child's exam).
     var exam = /\b(?:exams?|test[\s-]?prep|ket|fce|cae|cpe)\b|考試|應考|測驗/i.test(low);
     var adultSignal = older || ((business || exam) && !(age && age.max < 13));
+    // An exam named, for the exam-game filter: exam words, or an exam's name.
+    var examAsked = exam || /\b(?:hkdse|dse|ielts|toefl|toeic|cambridge|yle)\b|雅思|口試|文憑試/i.test(raw);
 
     // A5: nothing left but teaching words?
     var rest = tokens(work.replace(WHICH_LESSON, ' $2 ')).map(norm).filter(function (t) { return !STOP[t] && !TEACH_EN[t] && !/^\d+$/.test(t); });
@@ -707,6 +722,7 @@
       reading: reading,
       minutes: minutes,
       adultSignal: adultSignal,
+      examAsked: examAsked,
       ageOnly: rest.length === 0 && zhRest.length === 0 && !zhTopicWord(work) && !phraseTopic,
       rest: rest,
       zhWork: (work.match(CJK_ALL) || []).join(''),
@@ -733,9 +749,18 @@
   }
 
   // Hard filters (A2): too young for age_min, or outside a stated level.
+  // An exam game: its title names an exam (IELTS Speaking Room). Ladder Talk
+  // lists IELTS and "exams" among its conversation topics, so it is not one.
+  var EXAM_TITLE = toSet(['exam', 'ielts', 'w:dse', 'w:hkdse', 'w:toefl', 'w:toeic', 'w:ket', 'w:fce', 'w:cambridge']);
+  function examGame(g) { return indexGame(g).titleKeys.some(function (k) { return EXAM_TITLE[k]; }); }
+
   function passes(g, q) {
     var a = filterAge(q);
     if (a != null && g.age_min != null && a < g.age_min) return false;
+    // Nothing said about the learner's age and no exam named: no exam game (round 8).
+    if (!q.hasAge && !q.examAsked && examGame(g)) return false;
+    // A festival named: a game that lists festivals but not that one is not for it (round 8).
+    if (!listsFestival(g, q)) return false;
     if (q.hasLevel) {
       var r = levelRange(g);
       if (r && !q.levels.some(function (l) { var i = LEVELS.indexOf(l); return i >= r[0] && i <= r[1]; })) return false;
@@ -883,14 +908,16 @@
         .sort(function (a, b) { return b.s - a.s || a.i - b.i; })
         .map(function (x) { return x.id; });
     }
-    // AI mode, a teen, adult, exam or business question that names a topic or
-    // a skill ("adult business english"): a model pick that matches neither,
-    // only "adult" (Clinic Day, Quick Fire Flashcards), is off topic. It is not
+    // AI mode, a question that names a topic or a skill ("adult business
+    // english", 「小.5 生字」): a model pick that matches neither, only "adult"
+    // or an age (Clinic Day, Quick Fire Flashcards), is off topic. It is not
     // taken from the model's picks or from the extra games of a skill, so it
-    // cannot push a game about the topic out of the cards (round 7). A head
-    // count ("6 students") or an everyday word ("talk") names no skill.
-    var named = q.namedSkills || [];
-    var focused = !!lead && q.adultSignal && (named.length > 0 || ctx.scored.some(function (x) { return x.kw > 0; }));
+    // cannot push a game about the topic out of the cards (round 7; for every
+    // age since round 8). A head count ("6 students") is not a skill asked
+    // for; an everyday word is, when no other skill word is there ("wants to
+    // learn new words" asks for vocabulary).
+    var named = q.skills.filter(function (sk) { return sk !== 'group' || (q.namedSkills || []).indexOf('group') >= 0; });
+    var focused = !!lead && (named.length > 0 || ctx.scored.some(function (x) { return x.kw > 0; }));
     function offTopic(id) {
       var g = byId[id];
       if (!focused || !g || lead.indexOf(id) >= 0 || named.indexOf(g.skill) >= 0) return false;
@@ -982,6 +1009,18 @@
     }
 
     trim(N.max);
+    // A festival named: at least one festival game that lists it is in the
+    // cards, in place of the last card that is not part of the lead, so a
+    // skill's games or the model's picks never push them all out (round 8).
+    if (q.cset && q.cset.festival && !items.some(function (it) { return festivalGame(ctx.cat, it); })) {
+      var fx = ctx.scored.filter(function (x) { return festivalGame(ctx.cat, { id: x.g.id }) && !(q.adultSignal && x.g.kid); })[0];
+      if (fx) {
+        for (var j = items.length - 1; j >= 0 && items.length >= N.max; j--) {
+          if (!lead || !itemIds(items[j]).some(function (id) { return lead.indexOf(id) >= 0; })) items.splice(j, 1);
+        }
+        if (items.length < N.max) items.push({ id: fx.g.id });
+      }
+    }
     if (!items.some(function (it) { return it.kid; })) kidNote = false;
     return { items: items, kidNote: kidNote };
   }
@@ -1319,6 +1358,12 @@
       .sort(function (a, b) { return b.s - a.s || a.i - b.i; })[0];
     var bestId = ctx.festPick && flatIds(items).indexOf(ctx.festPick) >= 0 ? ctx.festPick : best && itemIds(best.it)[0];
     if (bestId && lead.indexOf(bestId) < 0) lead.push(bestId);
+    // A festival named: the answer's festival games stay too, so the model's
+    // other picks cannot push them out ("Halloween speaking", round 8).
+    if (ctx.q.cset && ctx.q.cset.festival) items.forEach(function (it) {
+      var id = itemIds(it)[0];
+      if (festivalGame(ctx.cat, it) && lead.indexOf(id) < 0) lead.push(id);
+    });
     return lead;
   }
 
@@ -1670,6 +1715,18 @@
     SKILL_WORDS[s].en.split(' ').forEach(function (w) { w = norm(w); keys[conceptOf(w) || 'w:' + w] = true; });
     SKILL_WORDS[s].zh.split(' ').forEach(function (w) { keys[conceptOf(w) || zhConceptIn(w) || 'z:' + w] = true; });
   });
+  // A game that lists festivals (Festival Speaking Builder's menu, Ladder
+  // Festivals' keywords) is for a named festival only if it lists it: for
+  // 「情人節 口說」 neither is a match (round 8). A game that lists none, or a
+  // question that names none, is not limited.
+  var FESTIVAL_NAMES = toSet(Object.keys(FESTIVAL_KEYS).filter(function (k) { return k !== 'festival'; }));
+  function festivalsAsked(q) { return Object.keys((q && q.cset) || {}).filter(function (k) { return FESTIVAL_NAMES[k]; }); }
+  function listsFestival(g, q) {
+    var asked = festivalsAsked(q);
+    if (!asked.length) return true;
+    var list = indexGame(g).kw.filter(function (k) { return FESTIVAL_NAMES[k.key]; }).map(function (k) { return k.key; });
+    return !list.length || asked.some(function (f) { return list.indexOf(f) >= 0; });
+  }
   // How much a game is about the skills asked for: its catalogue skill, plus
   // each of its keywords and title words that names one of them. Festival
   // names and other topic words do not count.
@@ -1723,7 +1780,11 @@
     // that skill. Otherwise the highest score that is not kid-themed (for an
     // older learner) and not a festival game when the question names no festival.
     var festPick = festivalSkillPick(cat, q, ranked.map(function (x) { return itemIds(x.it)[0]; }));
+    // No festival game fits the skill named (「8歲 聖誕節 文法」): the general
+    // festival game is Main, as the owner's rule says (round 7, round 8).
+    var festSkill = !noFest && (q.namedSkills || []).length > 0;
     var main = ranked.filter(function (x) { return itemIds(x.it)[0] === festPick; })[0] ||
+      (festSkill && ranked.filter(function (x) { return fest(x) && !(older && kid(x)); })[0]) ||
       ranked.filter(function (x) { return !(older && kid(x)) && !(noFest && fest(x)); })[0] ||
       (older && ranked.filter(function (x) { return !kid(x); })[0]) || ranked[0];
     var rest = ranked.filter(function (x) { return x !== main; });
