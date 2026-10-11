@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const { core } = require(path.join(ROOT, 'src', 'll-assistant.js'));
+const { core } = require(path.join(ROOT, 'src', 'll-assistant-app.js'));
 const { checkQuestion, runQuestion } = require(path.join(ROOT, 'tests', 'check.js'));
 const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalogue.json'), 'utf8'));
 const compactRaw = JSON.parse(fs.readFileSync(path.join(ROOT, 'dist', 'll-assistant', 'catalogue.compact.json'), 'utf8'));
@@ -48,8 +48,10 @@ test('the widget gets no absolute game address: games open by path from the curr
   assert.doesNotMatch(raw, /ladderlessons\.com/);
   assert.ok(compactRaw.games.every((g) => !('url' in g) && /^\/[^/]/.test(g.path)));
   assert.deepEqual(compactRaw.games.filter((g) => g.pub).map((g) => g.tier), ['free', 'free', 'free', 'free']);
-  const js = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.js'), 'utf8');
-  assert.doesNotMatch(js.replace(/^\s*\/\/.*$/gm, ''), /ladderlessons\.com/, 'no site address in the widget code');
+  for (const f of ['ll-assistant.js', 'll-assistant-app.js']) {
+    const js = fs.readFileSync(path.join(ROOT, 'src', f), 'utf8');
+    assert.doesNotMatch(js.replace(/^\s*\/\/.*$/gm, ''), /ladderlessons\.com/, `no site address in ${f}`);
+  }
 });
 
 test('ages.csv is merged by id exactly: blank stays blank, nothing guessed (A1)', () => {
@@ -248,15 +250,30 @@ test('the download size is one measured constant: 289,982,565 bytes = 277 MB, on
   assert.equal(compactRaw.model.bytes, 289982565, 'scripts/build.mjs MODEL_BYTES is the measured download');
   const mb = core.T && Math.ceil(compactRaw.model.bytes / 1048576);
   assert.equal(mb, 277);
-  const { internals } = require(path.join(ROOT, 'src', 'll-assistant.js'));
+  const { internals } = require(path.join(ROOT, 'src', 'll-assistant-app.js'));
   assert.equal(internals.toMB(compactRaw.model.bytes), 277);
   assert.equal(core.T.en.offerBtn.replace('{mb}', internals.toMB(compactRaw.model.bytes)), 'Download AI · 277 MB · one-time download');
   assert.equal(core.T.en.offerAgain.replace('{mb}', internals.toMB(compactRaw.model.bytes)), 'Use on-device AI (277 MB)');
-  const js = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.js'), 'utf8');
+  const js = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant-app.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.js'), 'utf8');
   assert.doesNotMatch(js, /modelDownloadBytes|headSize|ll-ai-bytes/, 'no second way of working out the size');
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   const sizes = [...readme.matchAll(/(\d{3}) MB[^\n]*?(?:download|button|offer)|(?:download|button|offer)[^\n.]*?\b(\d{3}) MB/gi)].map((m) => Number(m[1] || m[2]));
   assert.ok(sizes.length > 0 && sizes.every((n) => n === 277), 'README download sizes: ' + sizes.join(', '));
+});
+
+// ---------- page-load size (round 6) ----------
+
+test('page load: the button script is small; the finder, plan, sending and word list load on first open', async () => {
+  const zlib = await import('node:zlib');
+  const gz = (f) => zlib.gzipSync(fs.readFileSync(path.join(ROOT, 'dist', 'll-assistant', f)), { level: 9 }).length;
+  const shell = fs.readFileSync(path.join(ROOT, 'dist', 'll-assistant', 'll-assistant.js'), 'utf8');
+  assert.ok(gz('ll-assistant.js') <= 32 * 1024, `ll-assistant.js is ${(gz('ll-assistant.js') / 1024).toFixed(1)} KB gzip`);
+  // None of the finder's parts are in the page-load file.
+  for (const name of ['CONCEPTS', 'buildPlan', 'planSummary', 'sendPanel', 'mailtoLink', 'parsePlanCode', 'recommendRules', 'SYSTEM_PROMPT']) assert.ok(!shell.includes(name), `${name} is in the page-load file`);
+  // It loads the finder by a versioned name: the finder's own content hash.
+  const crypto = await import('node:crypto');
+  const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'src', 'll-assistant-app.js'))).digest('hex').slice(0, 10);
+  assert.ok(shell.includes(`'ll-assistant-app.js?v=${hash}'`));
 });
 
 // ---------- lesson plan (Feature 1) ----------
@@ -548,7 +565,7 @@ test('mailto: no recipient, the subject, the link and one line per step with the
 });
 
 test('analytics: the plan events are fixed names in the allowlist', () => {
-  const { internals } = require(path.join(ROOT, 'src', 'll-assistant.js'));
+  const { internals } = require(path.join(ROOT, 'src', 'll-assistant-app.js'));
   for (const e of ['ll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link']) assert.ok(internals.EVENTS.includes(e), e);
   assert.equal(internals.EVENTS.length, 11);
 });

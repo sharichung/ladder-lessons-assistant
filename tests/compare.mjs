@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const v2 = require(path.join(ROOT, 'src', 'll-assistant.js')).core;
+const v2 = require(path.join(ROOT, 'src', 'll-assistant-app.js')).core;
 const v1 = require(path.join(ROOT, 'tests', 'baseline', 'll-assistant.v1.js')).core;
 const { checkQuestion, runQuestion } = require(path.join(ROOT, 'tests', 'check.js'));
 

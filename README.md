@@ -48,12 +48,15 @@ Deploy **one folder: `dist/ll-assistant/`**. Copy it as-is into the main site, f
 
 | File | Size (gzip) | When it loads |
 |---|---|---|
-| `ll-assistant.js` | 147 KB (47 KB) | Page load, `defer`. Up from 97 KB (32 KB): the lesson plan, sending, and the English-Chinese word list |
+| `ll-assistant.js` | 12 KB (4.6 KB) | Page load, `defer`. Only the button, the guards that keep typing away from page scripts, `data-avoid` and the plan-link check |
 | `ll-assistant.css` | 18 KB (5 KB) | Page load, added by the script |
-| `catalogue.compact.json` | 43 KB (17 KB) | When the teacher opens the widget |
+| `ll-assistant-app.js` | 142 KB (46 KB) | The first time the teacher opens the widget: the finder itself (matching and the English-Chinese word list, the lesson plan, sending the plan, the AI offer, the conversation) |
+| `catalogue.compact.json` | 43 KB (17 KB) | The first time the teacher opens the widget |
 | `ll-worker.js` | 3 KB | Only after the download click, or when the model is already cached |
 | `vendor/web-llm.js` | 6.3 MB (2.2 MB) | Only after the download click, or when the model is already cached |
 | `vendor/web-llm.LICENSE.txt` | | Apache 2.0 licence for WebLLM. Keep it with the library |
+
+Deploy the files together. In `dist/`, `ll-assistant.js` loads the finder as `ll-assistant-app.js?v=<content hash>`, so a cached button script never pairs with a finder it was not built with. While the finder loads on the first click the button is marked busy; if it cannot load, the button says "Try again" / 「再試一次」 and the next click tries again.
 
 Then add one line before `</body>` on the pages where teachers should see it:
 
@@ -176,11 +179,11 @@ Exception: when the teacher states an age under 13, "business" and "work" do not
 - When two games score the same and the question is about teens, adults or work, the game written for older learners goes first ("工作英文" gives Ladder Talk before Community Helpers).
 
 **What counts as a match:**
-- **One meaning, two languages.** `CONCEPTS` in `src/ll-assistant.js` is a short list of word groups that mean the same thing in English and Chinese: skills (speaking = 口說 = 口語 = 口試, tenses = 時態, proofreading = 改錯 = 校對, vocabulary = 生字 = 詞彙…), learners (kids = 小朋友 = 細路 = 細路仔 = 小孩, student = 學生, adult = 成人…), school stages (Form 2 = F2 = S2 = 中二, P3 = 小三, secondary = 中學), work (work = office = 上班族 = 返工 = 職場; boss = 老闆 and colleague = 同事 and meeting = 開會 = 會議, each also meaning work; job = 職業 = 求職 = 工作面試), festivals, and a few classroom and everyday words (warm-up = 熱身, group = 小組, doctor = 睇醫生…). A teacher's word and a game keyword in the same group are one match, counted once, whichever language either is in; a Chinese keyword that contains a group word (切音節, 小組面試, 商業英文) belongs to that group. Every group gives the same skill in both languages (a unit test checks this). So a question and its translation get the same games in the same order: "Form 4 student speaking" and 「中四學生 口說」 both rank Quick Fire Flashcards, Festival Speaking Builder, Ladder Talk (the plan shows Festival Speaking Builder, the highest score, as the lesson split into its parts, with Quick Fire Flashcards and Ladder Talk under "Other games that fit"). A test runs 20 such pairs. Words not in the list still match as typed.
+- **One meaning, two languages.** `CONCEPTS` in `src/ll-assistant-app.js` is a short list of word groups that mean the same thing in English and Chinese: skills (speaking = 口說 = 口語 = 口試, tenses = 時態, proofreading = 改錯 = 校對, vocabulary = 生字 = 詞彙…), learners (kids = 小朋友 = 細路 = 細路仔 = 小孩, student = 學生, adult = 成人…), school stages (Form 2 = F2 = S2 = 中二, P3 = 小三, secondary = 中學), work (work = office = 上班族 = 返工 = 職場; boss = 老闆 and colleague = 同事 and meeting = 開會 = 會議, each also meaning work; job = 職業 = 求職 = 工作面試), festivals, and a few classroom and everyday words (warm-up = 熱身, group = 小組, doctor = 睇醫生…). A teacher's word and a game keyword in the same group are one match, counted once, whichever language either is in; a Chinese keyword that contains a group word (切音節, 小組面試, 商業英文) belongs to that group. Every group gives the same skill in both languages (a unit test checks this). So a question and its translation get the same games in the same order: "Form 4 student speaking" and 「中四學生 口說」 both rank Quick Fire Flashcards, Festival Speaking Builder, Ladder Talk, and both plans show Ladder Talk as the lesson with the other two under "Other games that fit" (a festival game is not Main without a festival in the question; see the lesson plan). A test runs 21 such pairs. Words not in the list still match as typed.
 - A Chinese group word inside a longer word with another meaning does not count: 新年度 (new school year) is not 新年, 超過年半 is not 過年, and 最高級 (superlative) is not the level 高級.
 - **Everyday uses of skill words** ("let's talk", "a few words", "quick question") do not count when the message also asks for a skill properly ("needs grammar").
 - **Letters are phonics:** alphabet, 字母 and 認字母 point to phonics. ABC does only next to a "cannot yet" or learning word (唔識, 不會, 還沒, 還未, 未識, 認得, can't, don't know, learn, recognise), so 「6歲小朋友，ABC還沒認得」 and 「細路 唔識ABC」 give Ladder Phonics first, while "I work at ABC Bank" and 「ABC公司 開會」 stay off-topic and "ABC Primary School, P3 vocab" gets vocabulary games.
-- **Festivals:** 聖誕, 聖誕節, 萬聖節, 復活節, 中秋, 新年, 過年, 農曆新年, 篝火之夜 and 節日 (and English "New Year", which is not read as "something new") each also mean "festival", so they find Ladder Festivals. A test checks that every festival named in a festival game's English keywords and description (Christmas, Easter, mid-autumn, mooncake, bonfire night) has a Chinese word that finds it; 新年, 農曆新年 and the other Chinese words are checked separately. Note: the catalogue does not list Halloween for Ladder Festivals; 「萬聖節 小朋友」 gets it because 萬聖節 is a festival word, not because the game covers Halloween.
+- **Festivals:** 聖誕, 聖誕節, 萬聖節, 萬聖, 復活節, 中秋, 新年, 過年, 農曆新年, 篝火之夜 and 節日 (and English "New Year" and "trick or treat", each read as one phrase) each also mean "festival", so they find Ladder Festivals. A test checks that every festival named in a festival game's English keywords and description (Christmas, Easter, mid-autumn, mooncake, bonfire night) has a Chinese word that finds it; 新年, 農曆新年 and the other Chinese words are checked separately. **Halloween:** Ladder Festivals' keywords in `catalogue.json` now include Halloween, 萬聖節, 萬聖 and "trick or treat" (owner's decision, round 6). Tests check them in keyword mode (`&llai=off`) and in AI mode with scripted and fake models, which may leave the game out: it stays first.
 - School years in a game's keywords (P4, 小四, 中一, 中學) count only a little and never as the topic: the age filter already uses them. So "中一 商業英文" gets Ladder Talk, not Ladder Vocabulary.
 - "group work", "work on", "worksheet" and 工作紙 are not the topic "work".
 - **One keyword match is enough** when the message mentions English or teaching (English, ESL, teach, tutor, 英文, 英語, 教, 補習, 練) or a learner (an age, a level, "adult", 學生…) and nothing else but filler: "English for work" and 職場英文 give Ladder Talk and Ladder Frames; "我學生 6 歲，想練自我介紹" gives Intro Builder. "class", "lesson" or "practice" alone are not enough, so "Where is my cooking class?" stays off-topic. Anything else needs a stronger match.
@@ -220,7 +223,7 @@ Today: "adult business english" and "商務英文 上班族" give **Ladder Talk*
 - A follow-up is never answered with "could not match"; as a first message it gets "Which skill?".
 - Not follow-ups: "hello again" and "next week" (the off-topic reply, as before).
 
-**Small talk:** "thanks", "ok", "Great, thanks!", "No more, thanks", "Thanks for your help", 多謝, 唔該, 唔該晒，我遲啲再試, 好的, 收到 get a short polite reply ("You're welcome. Ask me again any time." / 「唔使客氣，有需要再問我。」; for ok: "Sure. Ask me again any time." / 「好，有需要再問我。」). They never repeat the widget's last question and never count as its answer: after "Which skill?", "thanks" leaves the question open. A message with a number or a request in it ("8 thanks", "thanks, age 8 phonics") is not small talk.
+**Small talk** (owner's decision: a polite reply at any time, not only after a question): "thanks", "ok", "Great, thanks!", "No more, thanks", "Thanks for your help", 多謝, 唔該, 唔該晒，我遲啲再試, 好的, 收到 get a short polite reply ("You're welcome. Ask me again any time." / 「唔使客氣，有需要再問我。」; for ok: "Sure. Ask me again any time." / 「好，有需要再問我。」). They never repeat the widget's last question and never count as its answer: after "Which skill?", "thanks" leaves the question open. A message with a number or a request in it ("8 thanks", "thanks, age 8 phonics") is not small talk.
 
 **Short answers join the previous question.** A digit, a chip, or a reply that only gives an age ("she's 9", "9", "nine", "九", "佢今年九") or only gives a skill is added to the earlier question. A new full question starts fresh.
 - Games shown without an age come with the age buttons. Typing an age instead ("7", "she's 7", "7歲") also joins the earlier question. A reply with its own topic ("我學生 6 歲，想練自我介紹") is a new question.
@@ -229,7 +232,7 @@ Today: "adult business english" and "商務英文 上班族" give **Ladder Talk*
 
 Every answer with games is shown as a lesson plan, heading **Your lesson plan** / 「你嘅課堂安排」. Nothing the teacher typed is in it except the lesson length. All of it is built in code from the catalogue; in AI mode the model only picks the games.
 
-1. **Main activity** = the game with the highest score after every filter. For a teen, adult, exam or business question it is never kid-themed.
+1. **Main activity** = the game with the highest score after every filter. For a teen, adult, exam or business question it is never kid-themed. **Festival games** (games whose keywords are festivals: Ladder Festivals, Festival Speaking Builder) are never Main, and never a step at all, unless the question names a festival or says 節日/festival; they appear only under "Other games that fit". So "Form 4 口說" and 「中四 speaking」 get Ladder Talk as the lesson, while 「Form 4 中秋節口說」 still gets the festival games.
 2. **Main has 2 or more parts** (from `ages.csv`) → **single-game plan**: that game is the lesson, as one card, and its parts are the steps, in order.
    - At most 4 steps. A game with more parts gets parts 1 to 3, then one step 4 with the rest joined by " + ", in order ("Practice + Real Life"). No part name is dropped.
    - Part names stay in English in Chinese answers, as on the game's screens.
@@ -250,7 +253,7 @@ Every answer with games is shown as a lesson plan, heading **Your lesson plan** 
 
 Under every plan: a white-pill button **Send this plan to my laptop** / 「將呢堂課傳去我部電腦」. The plan stays on screen; the options open under the button.
 
-**The link:** `location.origin + "/library#llplan=" + code`, for example `/library#llplan=m45e.writing_RolePlayWriting.writing_ChainStory.writing_DetectivesNotebook`. The code holds only: a one-letter marker (`m` multi-game, `s` single-game, `o` one game then "Other games that fit"), the lesson length, `e` or `z` for the language, and the game ids in step order (a single-game plan's link includes its "Other games that fit"; the levels of one Ladder Vocabulary card are joined with `~`). A test fails if any word of a fixed question appears in a link.
+**The link:** `location.origin + "/library#llplan=" + code`, for example `/library#llplan=m45e.writing_RolePlayWriting.writing_ChainStory.writing_DetectivesNotebook`. The code holds only: a one-letter marker (`m` multi-game, `s` single-game), the lesson length, `e` or `z` for the language, and the game ids in step order. A single-game plan's link lists its "Other games that fit" after the game; a multi-game plan's link lists them after two dots (`m30e.a.b..c`). The levels of one Ladder Vocabulary card are joined with `~`. A test fails if any word of a fixed question appears in a link.
 
 **Opening a link** opens the widget with the plan, heading **Your saved lesson plan** / 「你儲存咗嘅課堂安排」, in the plan's language, as its own group in the conversation (any open question is closed). Unknown ids are left out; with none left, the usual empty state. The model never runs for it. The Kid-themed tags and note come back from the catalogue: in a plan that mixes kid-themed games with others, the kid-themed ones are tagged, and the note shows when their skill has nothing for older learners.
 
@@ -291,7 +294,7 @@ Your form shows first, then a small "or copy the link" / 「或者複製連結�
 5. A model question is never shown as written: the widget shows its own "How old are they?" with age buttons.
 6. Bad output falls back to keyword matching. So does a crash, a timeout (45 s) or a failed download, for the rest of the visit, and the teacher's text is kept.
 
-The system prompt in `src/ll-assistant.js` (`SYSTEM_PROMPT`) is the one you specified, unchanged.
+The system prompt in `src/ll-assistant-app.js` (`SYSTEM_PROMPT`) is the one you specified, unchanged.
 
 ### Language
 
@@ -447,7 +450,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 **Chromium:** `npm test` uses `$CHROME_PATH` if set, otherwise installed Google Chrome.
 
 **The question set:**
-- `tests/questions.json` has 207 fixed questions in English and Chinese, plus 20 English-Chinese pairs that must give the same games in the same order. They cover every failing case from the test round plus every review round's edge cases:
+- `tests/questions.json` has 215 fixed questions in English and Chinese, plus 21 English-Chinese pairs that must give the same games in the same order. They cover every failing case from the test round plus every review round's edge cases:
   - kids, adults, IELTS, DSE and Form 4
   - phonics, reading and vocabulary levels
   - lesson lengths, in digits and in words
@@ -456,7 +459,8 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
   - business and work English (Ladder Talk expected), self-introduction, group work and 工作紙 for kids, 返工
   - follow-ups in both languages (`after` = the message before; `newOnly` = no game repeated), including "nothing left"
   - "Year 5 口說" / "Year 5 speaking" with three games
-  - this round: ABC and child words, 上班族 開會英文, festivals in Chinese, several skills in one message, "Form 4 student speaking" = 「中四學生 口說」 (`sameAs`), small talk after a question, 「小三 文法」 / "Year 3 grammar" without Grammar Detective
+  - round 6: Halloween (萬聖節, 萬聖, "trick or treat"), "Form 4 口說" and 「中四 speaking」 with Ladder Talk or Quick Fire as Main (`mainAnyOf`, judged on the plan), 「Form 4 中秋節口說」 still with Festival Speaking Builder
+  - round 5: ABC and child words, 上班族 開會英文, festivals in Chinese, several skills in one message, "Form 4 student speaking" = 「中四學生 口說」 (`sameAs`), small talk after a question, 「小三 文法」 / "Year 3 grammar" without Grammar Detective
   - off-topic messages, with and without an age
   - prompt injection in English and Chinese
   - an empty message
@@ -474,7 +478,8 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 - **The real model's replies:** `tests/fixtures/model-replies-2026-10-06.json` holds the 94 replies Qwen2.5-0.5B gave on the owner's Mac. Replaying them through the old code gives exactly the owner's 119/122; through the current code, 122/122.
 - **Lesson plan:** step order and minutes for 3 games/30 min, 2 games/25 min, 3 games/no length and 1 game; minutes add up to the length for every length from 1 to 180 and every game's parts; 1B joins with no part name dropped; single-game plan for a game with parts, multi-game for one without; kid-themed never Main for "adult business english" or "Form 4 speaking"; summary lines in English and Chinese; the plan built from AI picks.
 - **Plan link:** round trip for every fixed question; only ids, length, language and marker; no typed word; unknown ids skipped; the mailto body.
-- **Matching this round:** the 20 English-Chinese pairs, `sameAs` pairs, every word group giving the same skill in both languages, festival words, several skills, small talk.
+- **Round 6:** the page-load file is under 32 KB gzip and holds none of the finder (no word list, plan or sending code) and names the finder by its content hash; festival games are never a step without a festival in the question (every fixed question); Halloween first in keyword and AI mode whatever the model picks; the two-dot link format round trip.
+- **Matching:** the 21 English-Chinese pairs, `sameAs` pairs, every word group giving the same skill in both languages, festival words, several skills, small talk.
 - **What the teacher sees:** for every fixed question with `firstNotKid` or `freeFirst`, the checker also judges the lesson plan's order (`tests/check.js`): the first card shown is never kid-themed, and a free game is the warm-up, Main or the first other game.
 - **Download size:** the constant is 289,982,565 bytes = 277 MB, and the button text and README match it.
 - **AI post-processing** with scripted models:
@@ -554,7 +559,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 
 ### Before and after (E3)
 
-**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 56/206, after 206/206**. Full table: `tests/results/keyword-before-after.md`.
+**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 56/214, after 214/214**. Full table: `tests/results/keyword-before-after.md`.
 
 **This round's questions on the previous version (commit 24133d3) and now:** all 13 of the owner's examples failed before and pass now. 5 more failed before and pass now: 「返工 要同老闆同事開會 想練英文」, 「新年 小朋友 活動」, the English multi-skill question, and "No more, thanks" / "Thanks again!", whose expected answer changed from the off-topic reply to small talk. 6 added with them already passed: two more child-word phrasings, 中秋, speaking and listening, and both Grammar Detective questions (they pass once the new `ages.csv` is built). The first 10 English-Chinese pairs: 3 gave the same games before, 10 now. The review then added 25 more fixed questions and 10 more pairs from its findings (ABC as a name, 新年度, "New Year", work words, skills separated by spaces, "let's talk", exam and middle-school questions, small-talk sentences).
 
@@ -600,7 +605,8 @@ To see a true first visit (the download button with nothing cached), use the dem
 
 | Measure | Value |
 |---|---|
-| Page-load cost | 2 requests: `ll-assistant.js` 32 KB gzip + `ll-assistant.css` 4 KB gzip. Layout shift 0. **Measured** in headless Chromium |
+| Page-load cost | 2 requests: `ll-assistant.js` 4.6 KB gzip + `ll-assistant.css` 4.9 KB gzip (was 32 KB + 4 KB before the lesson plan, 47 KB + 5 KB in the round-5 build). Layout shift caused by the widget: 0. **Measured** in headless Chromium |
+| First open | `ll-assistant-app.js` 46 KB gzip + `catalogue.compact.json` 17 KB gzip, loaded together, once per visit (then from the browser cache) |
 | Model download size | **277 MB** (289,982,565 bytes), **measured** in the cache on the owner's Mac. Download time not measured (the model was already cached) |
 | Model start from cache | **985 ms**, measured, owner's Mac (Apple GPU, Chrome 154) |
 | Time to first answer | **641 ms**; median answer **495 ms**. Measured on the owner's Mac, not a mid-range laptop |
@@ -618,7 +624,9 @@ ages.csv                     age_min, age_max, levels, kid_theme per game
 ll-tokens.css                site tokens copied from library.html
 LL_STYLE_GUIDE.md            brand style guide
 data/teacher-fields.csv      optional per-game how-to-run lines
-src/                         widget source (plain JS + CSS, no framework)
+src/ll-assistant.js          the button script (page load)
+src/ll-assistant-app.js      the finder (loaded on first open)
+src/                         also the CSS and the model worker (plain JS + CSS, no framework)
 scripts/build.mjs            builds dist/ll-assistant/ and validates the data
 scripts/serve.mjs            local static server
 dist/ll-assistant/           ← deploy this folder

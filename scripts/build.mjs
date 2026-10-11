@@ -14,6 +14,8 @@
 // CSV value is not one of the allowed values.
 
 import fs from 'node:fs';
+import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -200,16 +202,24 @@ const compact = {
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(path.join(OUT, 'vendor'), { recursive: true });
 fs.writeFileSync(path.join(OUT, 'catalogue.compact.json'), JSON.stringify(compact));
-for (const f of ['ll-assistant.js', 'll-assistant.css', 'll-worker.js']) {
+for (const f of ['ll-assistant-app.js', 'll-assistant.css', 'll-worker.js']) {
   fs.copyFileSync(path.join(ROOT, 'src', f), path.join(OUT, f));
 }
+// The button script loads the finder by name; the name gets the finder's
+// content hash, so a cached button script never loads a finder it does not match.
+const appHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'src', 'll-assistant-app.js'))).digest('hex').slice(0, 10);
+const shell = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.js'), 'utf8');
+const APP_LINE = "var APP_FILE = 'll-assistant-app.js';";
+if (shell.split(APP_LINE).length !== 2) { console.error('Build stopped: ll-assistant.js must name the finder exactly once as: ' + APP_LINE); process.exit(1); }
+fs.writeFileSync(path.join(OUT, 'll-assistant.js'), shell.replace(APP_LINE, `var APP_FILE = 'll-assistant-app.js?v=${appHash}';`));
 fs.copyFileSync(webllmSrc, path.join(OUT, 'vendor', 'web-llm.js'));
 fs.copyFileSync(path.join(ROOT, 'node_modules', '@mlc-ai', 'web-llm', 'LICENSE'), path.join(OUT, 'vendor', 'web-llm.LICENSE.txt'));
 
 const n = compact.games.length;
 const count = k => compact.games.filter(g => g[k]).length;
-const kb = f => (fs.statSync(path.join(OUT, f)).size / 1024).toFixed(1) + ' KB';
+const kb = f => (fs.statSync(path.join(OUT, f)).size / 1024).toFixed(1) + ' KB (' + (zlib.gzipSync(fs.readFileSync(path.join(OUT, f)), { level: 9 }).length / 1024).toFixed(1) + ' KB gzip)';
 console.log(`Built dist/ll-assistant/ from ${n} games`);
 console.log(`  from ages.csv: age_min ${compact.games.filter(g => g.age_min != null).length}/${n}, levels ${compact.games.filter(g => g.level_min || g.level_max).length}/${n}, kid_theme ${count('kid')}/${n}, parts ${count('parts')}/${n}; how-to-run: ${count('how_en')}/${n}`);
-console.log(`  ll-assistant.js ${kb('ll-assistant.js')}, ll-assistant.css ${kb('ll-assistant.css')}, catalogue.compact.json ${kb('catalogue.compact.json')}`);
+console.log(`  page load: ll-assistant.js ${kb('ll-assistant.js')}, ll-assistant.css ${kb('ll-assistant.css')}`);
+console.log(`  first open: ll-assistant-app.js ${kb('ll-assistant-app.js')}, catalogue.compact.json ${kb('catalogue.compact.json')}`);
 console.log(`  vendor/web-llm.js ${(fs.statSync(path.join(OUT, 'vendor', 'web-llm.js')).size / 1048576).toFixed(1)} MB (loaded only after the download click)`);

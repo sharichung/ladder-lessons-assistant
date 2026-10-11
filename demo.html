@@ -134,7 +134,7 @@
   document.getElementById('check').onclick = function () {
     var out = document.getElementById('device');
     out.textContent = 'Checking…';
-    LLAssistant.internals.checkDevice().then(function (r) {
+    LLAssistant.load().then(function () { return LLAssistant.internals.checkDevice(); }).then(function (r) {
       var lines = ['Device check: ' + (r.ok ? 'can run the AI' : 'keyword matching only') + ' (' + r.reason + ')',
         'navigator.gpu: ' + !!navigator.gpu, 'deviceMemory: ' + (navigator.deviceMemory || 'not reported'), 'userAgent: ' + navigator.userAgent];
       out.textContent = lines.join('\n');

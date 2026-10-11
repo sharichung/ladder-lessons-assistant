@@ -16,7 +16,7 @@ import { startServer } from '../scripts/serve.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const { core } = require(path.join(ROOT, 'src', 'll-assistant.js'));
+const { core } = require(path.join(ROOT, 'src', 'll-assistant-app.js'));
 const { checkQuestion, runQuestion } = require(path.join(ROOT, 'tests', 'check.js'));
 const CLARITY_JS = require.resolve('clarity-js/build/clarity.min.js');
 const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalogue.json'), 'utf8'));
@@ -69,10 +69,20 @@ async function newPage({ fakeGpu = false, noGpuObject = false, ua, worker, viewp
   }
   await context.addInitScript(({ fakeGpu, noGpuObject }) => {
     if (noGpuObject) { try { delete Navigator.prototype.gpu; } catch (e) { /* ignore */ } }
-    window.__cls = 0;
+    // Layout shift, split by cause: a shift with a moved node inside the widget
+    // (or the widget itself) is the widget's; anything else is the demo page's.
+    window.__cls = 0; window.__clsWidget = 0; window.__clsShifts = [];
     try {
-      new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__cls += e.value; })
-        .observe({ type: 'layout-shift', buffered: true });
+      new PerformanceObserver((l) => {
+        for (const e of l.getEntries()) {
+          if (e.hadRecentInput) continue;
+          window.__cls += e.value;
+          const nodes = (e.sources || []).map((src) => src.node).filter(Boolean);
+          const ours = nodes.some((n) => { const r = document.getElementById('ll-assistant'); return r && (n === r || r.contains(n)); });
+          if (ours) window.__clsWidget += e.value;
+          window.__clsShifts.push({ value: e.value, widget: ours, nodes: nodes.map((n) => n.nodeName + (n.id ? '#' + n.id : '') + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '')) });
+        }
+      }).observe({ type: 'layout-shift', buffered: true });
     } catch (e) { /* ignore */ }
     window.__opened = [];
     window.open = function (url) { window.__opened.push(String(url)); return null; };
@@ -192,12 +202,16 @@ test('Keyword mode (WebGPU off): page load, header, every fixed question, cards,
   assert.equal(await page.evaluate(async () => !navigator.gpu || !(await navigator.gpu.requestAdapter())), true, 'WebGPU should be off in this test');
   const loadPaths = requests.map((r) => new URL(r.url).pathname).filter((p) => !p.endsWith('/demo.html'));
   assert.deepEqual(loadPaths.sort(), ['/dist/ll-assistant/ll-assistant.css', '/dist/ll-assistant/ll-assistant.js'], 'page load fetched more than the widget script and CSS');
-  assert.equal(await page.evaluate(() => window.__cls), 0, 'layout shift');
+  assert.equal(await page.evaluate(() => window.__clsWidget), 0, 'layout shift caused by the widget: ' + JSON.stringify(await page.evaluate(() => window.__clsShifts)));
   assert.equal(await page.locator('#ll-assistant').getAttribute('data-clarity-mask'), 'true');
   assert.equal(await page.locator('#ll-assistant').evaluate((b) => getComputedStyle(b).position), 'fixed');
 
   await page.locator('#ll-assistant .ll-launcher').click();
   await page.waitForFunction(() => LLAssistant.internals.state().ai === 'rules');
+  // Round 6: the finder (matching, plan, sending, word list) comes only now, once, with the catalogue.
+  const openPaths = requests.map((r) => new URL(r.url).pathname).filter((p) => !p.endsWith('/demo.html'));
+  assert.deepEqual(openPaths.filter((p) => /ll-assistant-app\.js$/.test(p)), ['/dist/ll-assistant/ll-assistant-app.js'], 'the finder loads once, on open');
+  assert.ok(requests.some((r) => /ll-assistant-app\.js\?v=[0-9a-f]{10}$/.test(r.url)), 'by its versioned name');
   assert.equal(await page.evaluate(() => LLAssistant.internals.state().device.reason), 'no-gpu-adapter');
   assert.equal(await page.locator('#ll-assistant .ll-offer').isVisible(), false, 'no AI offer without WebGPU');
   assert.equal(await page.locator('#ll-assistant .ll-privacy').innerText(), 'Runs in your browser. What you type is not sent to us.');
@@ -1739,5 +1753,64 @@ test('Cancelling a start from the cache keeps the one size on the offer (fix 2)'
   assert.equal(await page.locator('#ll-assistant .ll-offer .ll-link').innerText(), `Use on-device AI (${MB} MB)`);
   await expandOffer(page);
   assert.equal(await page.locator('#ll-assistant .ll-offer .ll-btn').innerText(), `Download AI · ${MB} MB · one-time download`);
+  await context.close();
+});
+
+test('The finder file loads on first open only; if it cannot load, the button says "Try again" and a second click works (round 6)', async () => {
+  const { context, page, requests } = await newPage();
+  let block = true;
+  await context.route('**/ll-assistant-app.js*', (r) => (block ? r.abort() : r.continue()));
+  await page.goto(DEMO);
+  await page.waitForFunction(() => window.LLAssistant && document.querySelector('#ll-assistant .ll-launcher'));
+  await page.waitForTimeout(300);
+  assert.ok(!requests.some((r) => /ll-assistant-app\.js/.test(r.url)), 'not fetched before the widget is opened');
+  assert.equal(typeof (await page.evaluate(() => window.LLAssistant.core)), 'undefined', 'the finder is not on the page yet');
+  await page.locator('#ll-assistant .ll-launcher').click();
+  await page.waitForFunction(() => document.querySelector('#ll-assistant .ll-launcher-text').textContent === 'Try again');
+  assert.equal(await page.locator('#ll-assistant .ll-panel').count(), 0);
+  block = false;
+  await page.locator('#ll-assistant .ll-launcher').click();
+  await page.waitForFunction(() => LLAssistant.internals.state().open && document.querySelector('#ll-assistant .ll-panel:not([hidden])'));
+  assert.equal(await page.locator('#ll-assistant .ll-launcher-text').evaluate((n) => n.textContent), 'Find a game');
+  const r = await ask(page, 'Age 8 phonics');
+  assert.equal(r.turn.kind, 'picks');
+  await context.close();
+});
+
+test('Halloween finds Ladder Festivals in keyword mode (&llai=off) and in AI mode; Form 4 speaking does not lead with a festival game (round 6)', async () => {
+  const HALLOWEEN = ['Halloween activity for kids', '萬聖節 小朋友', '萬聖 活動', 'trick or treat game for kids'];
+  // Keyword mode, as on demo.html?llai=off
+  let { context, page } = await newPage({ fakeGpu: true });
+  await openWidget(page, DEMO + '?llai=off');
+  assert.equal(await page.evaluate(() => LLAssistant.internals.state().ai), 'rules');
+  for (const text of HALLOWEEN) {
+    const r = await ask(page, text);
+    assert.equal(r.turn.source, 'rules');
+    assert.equal(r.turn.ids[0], 'speaking_LadderFestivals', text);
+    assert.equal(await r.el.locator('.ll-card .ll-card-title').first().innerText().then((x) => x.replace(/\s*↗\s*$/, '')), 'Ladder Festivals', `${text}: first card shown`);
+  }
+  // Form 4 speaking: Ladder Talk is the lesson; Festival Speaking Builder only under "Other games that fit".
+  for (const text of ['Form 4 口說', '中四 speaking']) {
+    const r = await ask(page, text);
+    assert.equal(r.turn.plan.kind, 'single', text);
+    assert.deepEqual(r.turn.plan.item, ['speaking_LadderTalk'], text);
+    assert.ok(r.turn.plan.others.some((x) => x[0] === 'speaking_FestivalSentenceBuilder'), text);
+  }
+  // With a festival named, the festival games stay.
+  const mid = await ask(page, 'Form 4 中秋節口說');
+  assert.ok(mid.turn.ids.includes('speaking_FestivalSentenceBuilder'));
+  await context.close();
+
+  // AI mode (a fake model that picks other games first): Ladder Festivals still leads.
+  ({ context, page } = await newPage({ fakeGpu: true, worker: FAKE_WORKER }));
+  await openWidget(page);
+  await expandOffer(page);
+  await page.locator('#ll-assistant .ll-offer .ll-btn').click();
+  await page.waitForFunction(() => LLAssistant.internals.state().ai === 'ready');
+  for (const text of HALLOWEEN) {
+    const r = await ask(page, text + ' qqone');
+    assert.equal(r.turn.source, 'ai', text);
+    assert.equal(r.turn.ids[0], 'speaking_LadderFestivals', text);
+  }
   await context.close();
 });
