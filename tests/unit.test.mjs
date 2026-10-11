@@ -13,7 +13,7 @@ const { checkQuestion, runQuestion } = require(path.join(ROOT, 'tests', 'check.j
 const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalogue.json'), 'utf8'));
 const compactRaw = JSON.parse(fs.readFileSync(path.join(ROOT, 'dist', 'll-assistant', 'catalogue.compact.json'), 'utf8'));
 const cat = core.prepareCatalogue(JSON.parse(JSON.stringify(compactRaw)));
-const { questions } = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'questions.json'), 'utf8'));
+const { questions, pairs } = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'questions.json'), 'utf8'));
 const realIds = new Set(source.games.map((g) => g.id));
 
 function readCsv(file) {
@@ -140,13 +140,367 @@ test('teen and adult signals, with the under-13 exception for business and work'
 for (const q of questions) {
   test(`keyword mode: ${q.id}`, async () => {
     if (q.expect === 'nothing-sent') { assert.equal(q.text.trim(), ''); return; }
-    const { res: r, shown } = await runQuestion(core, q, (text, opts) => core.recommendRules(cat, text, opts));
+    const { res: r, shown } = await runQuestion(core, q, (text, opts) => core.recommendRules(cat, text, opts), cat);
     assert.equal(core.detectLang(q.text), q.lang);
     const c = checkQuestion(q, r, cat, shown);
     assert.ok(c.ok, `${q.id}: ${c.fails.join('; ')} -> ${r.kind} ${r.ids.join(', ')}`);
     for (const id of r.ids) assert.ok(realIds.has(id), id);
   });
 }
+
+// C5: a question and its translation get the same games in the same order.
+test('keyword mode: questions marked sameAs show the same games in the same order', async () => {
+  const run = async (q) => (await runQuestion(core, q, (text, opts) => core.recommendRules(cat, text, opts))).res;
+  const byId = Object.fromEntries(questions.map((q) => [q.id, q]));
+  const marked = questions.filter((q) => q.sameAs);
+  assert.ok(marked.length >= 2);
+  for (const q of marked) {
+    const a = await run(q), b = await run(byId[q.sameAs]);
+    assert.equal(a.kind, b.kind, q.id);
+    assert.deepEqual(a.ids, b.ids, `${q.text} -> ${a.ids.join(', ')} | ${byId[q.sameAs].text} -> ${b.ids.join(', ')}`);
+  }
+});
+
+test('keyword mode: English and Chinese question pairs (at least 10) give the same games in the same order (C5)', () => {
+  assert.ok(pairs.length >= 10, 'at least 10 pairs');
+  for (const [en, zh] of pairs) {
+    assert.equal(core.detectLang(en), 'en', en);
+    assert.equal(core.detectLang(zh), 'zh', zh);
+    const a = core.recommendRules(cat, en), b = core.recommendRules(cat, zh);
+    assert.equal(a.kind, 'picks', en);
+    assert.equal(b.kind, 'picks', zh);
+    assert.deepEqual(a.ids, b.ids, `${en} -> ${a.ids.join(', ')} | ${zh} -> ${b.ids.join(', ')}`);
+  }
+});
+
+// C5: a word group means one skill in both languages (spelling = 拼寫 = 默書 are all vocabulary).
+test('every word group gives the same skills in English and Chinese (C5)', () => {
+  const W = core.SKILL_WORDS;
+  const skillsOf = (w, lang) => Object.keys(W).filter((id) => W[id][lang].split(' ').includes(w)).sort().join();
+  const bad = [];
+  for (const [group, en, zh] of core.CONCEPTS) {
+    const e = new Set(en.split(' ').map((w) => skillsOf(w, 'en')).filter(Boolean));
+    const z = new Set(zh.split(' ').map((w) => skillsOf(w, 'zh')).filter(Boolean));
+    if (!e.size && !z.size) continue;
+    const all = new Set([...e, ...z]);
+    if (all.size > 1 || !e.size || !z.size) bad.push(`${group}: en ${[...e].join('|') || '-'} / zh ${[...z].join('|') || '-'}`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+// C3: every festival a festival game names in English has a Chinese word, and that word finds the game.
+test('every festival named by a festival game has a Chinese keyword that finds it (C3)', () => {
+  const NAMES = ['christmas', 'xmas', 'halloween', 'easter', 'mid-autumn', 'mooncake', 'chinese new year', 'lunar new year', 'new year',
+    'bonfire night', 'dragon boat', 'valentine', 'thanksgiving', 'diwali', 'ching ming', 'chung yeung', 'hanukkah', 'ramadan', 'eid', 'lantern festival'];
+  const festivalGames = cat.games.filter((g) => /\bfestival/i.test(g.kw + ' ' + g.title));
+  assert.ok(festivalGames.length >= 2);
+  let checked = 0;
+  for (const g of festivalGames) {
+    const text = (g.kw + ' ' + g.desc_en + ' ' + g.title).toLowerCase();
+    for (const name of NAMES) {
+      if (!new RegExp('\\b' + name.replace(/[- ]/g, '[\\s-]') + '\\b').test(text)) continue;
+      checked++;
+      const group = name.includes('new year') ? core.CONCEPTS.find((c) => c[0] === 'newyear') : core.CONCEPTS.find((c) => c[1].split(' ').includes(name.split(' ')[0]));
+      assert.ok(group, `${g.id}: no word group for "${name}"`);
+      const zhWords = group[2].split(' ').filter(Boolean);
+      assert.ok(zhWords.length, `${g.id}: "${name}" has no Chinese keyword`);
+      for (const w of zhWords) {
+        const r = core.recommendRules(cat, w + ' 小朋友');
+        assert.ok(r.ids.includes(g.id), `${g.id} "${name}" -> ${w}: ${r.kind} ${r.ids.join(', ')}`);
+      }
+    }
+  }
+  assert.ok(checked >= 4, 'festival names found: ' + checked);
+  for (const w of ['聖誕', '聖誕節', '萬聖節', '新年', '中秋', '節日', '復活節', '農曆新年']) {
+    assert.equal(core.recommendRules(cat, w + ' 活動').ids[0], 'speaking_LadderFestivals', w);
+  }
+});
+
+test('C4: a message naming several skills gets one game per skill before a second of any', () => {
+  const r = core.recommendRules(cat, 'Form 2學生想練tenses、生字跟文章改錯');
+  assert.equal(r.items.length, 3);
+  assert.equal(r.items[0].id, 'grammar_TenseStudio', 'message order: tenses first');
+  assert.ok(r.items[1].family === 'Ladder Vocabulary' || cat.byId[r.items[1].id || r.items[1].ids[0]].skill === 'vocab', 'then a vocabulary game');
+  assert.ok(['grammar_Detective', 'grammar_SentenceSurgery'].includes(r.items[2].id), 'then a proofreading game');
+  // One skill named twice ("面試" and "口語") is one request, not two.
+  assert.equal(core.facetsOf('小六學生，準備升中面試，練口語').length, 1);
+  assert.equal(core.facetsOf('Age 9, speaking and listening').length, 2);
+  assert.equal(core.facetsOf('Age 7, beginner, phonics, 30 min').length, 1);
+  // AI mode keeps every skill's game.
+  assert.deepEqual(r.ctx.lead, r.ctx.facetIds);
+});
+
+test('C6: thanks, ok, 多謝 and 唔該 are small talk; with a number or a request they are not', () => {
+  for (const t of ['thanks', 'Thanks!', 'ok', 'OK thanks', 'Great, thanks!', 'No more, thanks', 'thank you so much', '多謝', '多謝晒', '唔該', '唔該晒', '好的', '收到'])
+    assert.ok(core.smallTalk(t), t);
+  for (const t of ['thanks, age 8 phonics', '8 thanks', '九歲 多謝', 'ok another one', '好玩嘅遊戲', 'hello', 'good morning', 'not ok', 'Age 8'])
+    assert.equal(core.smallTalk(t), null, t);
+  // After "Which skill do you want to practise?", thanks does not answer it: the question stays open.
+  const state = { pending: core.pendingFrom(core.recommendRules(cat, 'Age 8'), 'Age 8', 'en'), lastQuery: 'Age 8', shown: [], lang: 'en' };
+  assert.equal(state.pending.type, 'skill');
+  assert.ok(core.route(state, 'thanks').smalltalk);
+  assert.equal(core.route(state, 'phonics').text, 'Age 8. phonics');
+});
+
+// ---------- download size: one number everywhere (fix 2) ----------
+
+test('the download size is one measured constant: 289,982,565 bytes = 277 MB, on the button and in the README', () => {
+  assert.equal(compactRaw.model.bytes, 289982565, 'scripts/build.mjs MODEL_BYTES is the measured download');
+  const mb = core.T && Math.ceil(compactRaw.model.bytes / 1048576);
+  assert.equal(mb, 277);
+  const { internals } = require(path.join(ROOT, 'src', 'll-assistant.js'));
+  assert.equal(internals.toMB(compactRaw.model.bytes), 277);
+  assert.equal(core.T.en.offerBtn.replace('{mb}', internals.toMB(compactRaw.model.bytes)), 'Download AI · 277 MB · one-time download');
+  assert.equal(core.T.en.offerAgain.replace('{mb}', internals.toMB(compactRaw.model.bytes)), 'Use on-device AI (277 MB)');
+  const js = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.js'), 'utf8');
+  assert.doesNotMatch(js, /modelDownloadBytes|headSize|ll-ai-bytes/, 'no second way of working out the size');
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const sizes = [...readme.matchAll(/(\d{3}) MB[^\n]*?(?:download|button|offer)|(?:download|button|offer)[^\n.]*?\b(\d{3}) MB/gi)].map((m) => Number(m[1] || m[2]));
+  assert.ok(sizes.length > 0 && sizes.every((n) => n === 277), 'README download sizes: ' + sizes.join(', '));
+});
+
+// ---------- lesson plan (Feature 1) ----------
+
+const it = (id) => ({ id });
+const ids = (plan) => (plan.kind === 'single' ? [plan.item] : plan.steps.map((st) => st.item)).map((x) => x.id || x.family);
+// Games without parts, by plan: free, parent and teacher.
+const NOPARTS = cat.games.filter((g) => !g.parts);
+const FREE0 = NOPARTS.find((g) => g.tier === 'free').id;
+const PARENT0 = NOPARTS.filter((g) => g.tier === 'parent').map((g) => g.id);
+const TEACHER0 = NOPARTS.filter((g) => g.tier === 'teacher').map((g) => g.id);
+
+// A keyword answer with chosen scores, the way buildPlan gets one.
+function fakeAnswer(list, scores, minutes, q = {}) {
+  const res = { kind: 'picks', items: list.map(it), q: { minutes, adultSignal: false, ...q }, kidNote: false };
+  Object.defineProperty(res, 'ctx', { value: { scoreOf: Object.fromEntries(list.map((id, i) => [id, { s: scores[i] }])) } });
+  return res;
+}
+
+test('1B: more than four parts become three steps and a fourth joined with " + ", in order, no name dropped', () => {
+  assert.deepEqual(core.partSteps(['Warm-up', 'Words', 'Discuss', 'Practice', 'Real Life']), ['Warm-up', 'Words', 'Discuss', 'Practice + Real Life']);
+  assert.deepEqual(core.partSteps(['Slides', 'Build', 'Choose', 'Reason', 'Speaking', 'Rapid']), ['Slides', 'Build', 'Choose', 'Reason + Speaking + Rapid']);
+  assert.deepEqual(core.partSteps(['A', 'B', 'C', 'D']), ['A', 'B', 'C', 'D']);
+  const many = cat.games.filter((g) => g.parts && g.parts.length > 4);
+  assert.ok(many.length >= 10, 'games with more than four parts: ' + many.length);
+  for (const g of cat.games.filter((x) => x.parts)) {
+    for (const total of [null, 5, 10, 15, 20, 30, 45, 60, 90]) {
+      const steps = core.partMinutes(total, g.parts).names;
+      assert.ok(steps.length <= 4, g.id);
+      assert.deepEqual(steps.join(' + ').split(' + '), g.parts, `${g.id} ${total}: every part, in order`);
+    }
+  }
+});
+
+test('ages.csv parts are merged in order, blank stays blank, parts_basis is not used', () => {
+  const rows = readCsv('ages.csv');
+  for (const r of rows) {
+    const g = compactRaw.games.find((x) => x.id === r.id);
+    if (!r.parts) assert.equal(g.parts, undefined, r.id);
+    else assert.deepEqual(g.parts, r.parts.split(' | '), r.id);
+  }
+  assert.ok(!JSON.stringify(compactRaw).includes('parts_basis') && !JSON.stringify(compactRaw).includes('screen labels'));
+  assert.equal(compactRaw.games.find((g) => g.id === 'grammar_Detective').age_min, 10);
+});
+
+test('multi-game plan: step order and minutes for 3 games/30 min, 2 games/25 min, 3 games/no length, 1 game', () => {
+  const [p1, p2] = PARENT0;
+  // 3 games, 30 min: Main = highest score; warm-up = the free game; wrap-up = the one left. 20/60/20 -> 5/20/5.
+  let plan = core.buildPlan(fakeAnswer([FREE0, p1, p2], [6, 9, 7], 30), cat);
+  assert.equal(plan.kind, 'multi');
+  assert.deepEqual(plan.steps.map((st) => [st.role, st.item.id, st.min]), [['warmup', FREE0, 5], ['main', p1, 20], ['wrapup', p2, 5]]);
+  // 2 games, 25 min: 30/70 -> 5/20 (halves round down; the main activity takes the rest).
+  plan = core.buildPlan(fakeAnswer([p1, p2], [5, 9], 25), cat);
+  assert.deepEqual(plan.steps.map((st) => [st.role, st.item.id, st.min]), [['warmup', p1, 5], ['main', p2, 20]]);
+  // 3 games, no length: labels, no minutes. No free game: warm-up is the next highest.
+  plan = core.buildPlan(fakeAnswer([p1, p2, PARENT0[2]], [7, 9, 8], null), cat);
+  assert.deepEqual(plan.steps.map((st) => [st.role, st.item.id, st.min]), [['warmup', PARENT0[2], null], ['main', p2, null], ['wrapup', p1, null]]);
+  // 1 game: no label; minutes only with a length.
+  plan = core.buildPlan(fakeAnswer([p1], [9], null), cat);
+  assert.deepEqual(plan.steps.map((st) => [st.role, st.item.id, st.min]), [[null, p1, null]]);
+  plan = core.buildPlan(fakeAnswer([p1], [9], 20), cat);
+  assert.deepEqual(plan.steps.map((st) => st.min), [20]);
+  // A free game that is Main is not also the warm-up.
+  plan = core.buildPlan(fakeAnswer([FREE0, p1, p2], [9, 6, 7], 45), cat);
+  assert.deepEqual(plan.steps.map((st) => [st.role, st.item.id, st.min]), [['warmup', p2, 10], ['main', FREE0, 25], ['wrapup', p1, 10]]);
+});
+
+test('minutes always add up to the stated length, at least 5 a step, never invented', () => {
+  for (let total = 1; total <= 180; total++) {
+    for (const n of [1, 2, 3]) {
+      const games = PARENT0.slice(0, n);
+      const plan = core.buildPlan(fakeAnswer(games, games.map((_, i) => 9 - i), total), cat);
+      const mins = plan.steps.map((st) => st.min);
+      assert.equal(mins.reduce((a, b) => a + b, 0), total, `${n} games ${total} min: ${mins}`);
+      if (total >= 5) assert.ok(mins.every((m) => m >= 5), `${n} games ${total} min: ${mins}`);
+      if (total % 5 === 0) assert.ok(mins.every((m) => m % 5 === 0), `${n} games ${total} min: ${mins}`);
+      assert.equal(plan.steps.length + plan.others.length, n, 'a game left out of the steps is still shown');
+    }
+    for (const g of cat.games.filter((x) => x.parts)) {
+      const split = core.partMinutes(total, g.parts);
+      assert.equal(split.mins.reduce((a, b) => a + b, 0), total, `${g.id} ${total}`);
+      if (total >= 5) assert.ok(split.mins.every((m) => m >= 5), `${g.id} ${total}: ${split.mins}`);
+    }
+  }
+  // No length: no minutes anywhere.
+  for (const q of questions.filter((x) => x.expect === 'picks' && !x.after)) {
+    const r = core.recommendRules(cat, q.text);
+    const plan = core.buildPlan(r, cat);
+    if (r.q.minutes == null) assert.ok(plan.steps.every((st) => st.min == null), q.id);
+    else assert.equal(plan.steps.reduce((a, st) => a + st.min, 0), r.q.minutes, q.id);
+  }
+});
+
+test('single-game plan: Main with parts is the lesson; parts in order; up to 2 other games, free first', () => {
+  const tense = core.buildPlan(core.recommendRules(cat, 'Form 2 tenses 45 minutes'), cat);
+  assert.equal(tense.kind, 'single');
+  assert.equal(tense.item.id, 'grammar_TenseStudio');
+  assert.deepEqual(tense.steps.map((st) => st.name), cat.byId.grammar_TenseStudio.parts);
+  assert.deepEqual(tense.steps.map((st) => st.min), [15, 10, 10, 10]);
+  assert.ok(tense.others.length <= 2);
+  // A game without parts as Main gives a multi-game plan.
+  const story = core.buildPlan(core.recommendRules(cat, 'P5 student, writing a story, 45 mins'), cat);
+  assert.equal(story.kind, 'multi');
+  assert.ok(!cat.byId[story.steps.find((st) => st.role === 'main').item.id].parts);
+  assert.deepEqual(story.steps.map((st) => st.min), [10, 25, 10]);
+  // Other games that fit: free first.
+  const talk = core.buildPlan(fakeAnswer(['speaking_LadderTalk', TEACHER0[0], FREE0], [9, 8, 2], null), cat);
+  assert.equal(talk.kind, 'single');
+  assert.deepEqual(talk.steps.map((st) => st.name), ['Warm-up', 'Words', 'Discuss', 'Practice + Real Life']);
+  assert.deepEqual(talk.others.map((x) => x.id), [FREE0, TEACHER0[0]]);
+  // Fewer 5-minute blocks than parts: fewer steps, joined with " + " (3A).
+  const short = core.buildPlan(fakeAnswer(['speaking_LadderTalk'], [9], 10), cat);
+  assert.deepEqual(short.steps.map((st) => [st.name, st.min]), [['Warm-up', 5], ['Words + Discuss + Practice + Real Life', 5]]);
+});
+
+test('kid-themed game is never Main for a teen, adult, exam or business question', () => {
+  for (const text of ['adult business english', 'Form 4 speaking', 'Form 4 student speaking', 'adult business english 30 min', 'DSE writing', 'IELTS speaking adult', '中四學生 口說', '成人 商務英文', 'Teenager, B1, keeps mixing up tenses']) {
+    const r = core.recommendRules(cat, text);
+    const plan = core.buildPlan(r, cat);
+    const main = plan.kind === 'single' ? plan.item : plan.steps.find((st) => st.role === 'main' || st.role === null).item;
+    assert.ok(!(main.ids || [main.id]).every((id) => cat.byId[id].kid), `${text}: Main is kid-themed (${main.id || main.family})`);
+  }
+  // Even when the kid-themed game has the highest score.
+  const kid = NOPARTS.find((g) => g.kid).id;
+  let plan = core.buildPlan(fakeAnswer([kid, PARENT0[0]], [12, 5], null, { adultSignal: true }), cat);
+  assert.deepEqual(plan.steps.map((st) => [st.role, st.item.id]), [[null, PARENT0[0]]], 'Main alone; the kid-themed game is not the warm-up');
+  assert.deepEqual(plan.others.map((x) => x.id), [kid], 'it stays on screen under "Other games that fit"');
+  // A2: a kid-themed game is never the first card shown, warm-up included.
+  const kids = NOPARTS.filter((g) => g.kid).map((g) => g.id);
+  plan = core.buildPlan(fakeAnswer([PARENT0[0], kids[0], PARENT0[1]], [9, 8, 5], 30, { adultSignal: true }), cat);
+  assert.deepEqual(plan.steps.map((st) => [st.role, st.item.id]), [['warmup', PARENT0[1]], ['main', PARENT0[0]], ['wrapup', kids[0]]]);
+  // The link keeps that shape (marker "o": one step, then the others).
+  const one = core.buildPlan(fakeAnswer([kids[0], PARENT0[0], kids[1]], [12, 5, 4], 30, { adultSignal: true }), cat);
+  const back = core.parsePlanCode(core.planCode(one, 'en'), cat);
+  assert.match(core.planCode(one, 'en'), /^o30e\./);
+  assert.deepEqual(back.steps.map((st) => [st.role, st.item.id, st.min]), [[null, PARENT0[0], 30]]);
+  assert.deepEqual(back.others.map((x) => [x.id, x.kid]), [[kids[0], true], [kids[1], true]], 'kid-themed tags come back from the catalogue');
+});
+
+test('plan summary counts from the catalogue, in English and Chinese', () => {
+  const [p1, p2] = PARENT0, t1 = TEACHER0[0];
+  let plan = core.buildPlan(fakeAnswer([FREE0, t1, p1], [5, 9, 7], null), cat);
+  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run step 1 today, free.', '2 of 3 steps are in the Teacher plan.']);
+  assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['第 1 步今日就玩得，免費。', '3 步入面有 2 步喺老師版。']);
+  plan = core.buildPlan(fakeAnswer([p1, p2, FREE0], [9, 5, 7], null), cat);
+  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run step 1 today, free.', '2 of 3 steps are in the Parent plan.']);
+  plan = core.buildPlan(fakeAnswer([p1, t1], [5, 9], null), cat);
+  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['Both steps are in the Teacher plan.']);
+  assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['2 步全部喺老師版。']);
+  // Every step free: only the first line.
+  const frees = NOPARTS.filter((g) => g.tier === 'free').map((g) => g.id).slice(0, 2);
+  plan = core.buildPlan(fakeAnswer(frees, [9, 5], null), cat);
+  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run steps 1 and 2 today, free.']);
+  assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['第 1、2 步今日就玩得，免費。']);
+  // One paid step of three.
+  plan = core.buildPlan(fakeAnswer([frees[0], p1, frees[1]], [9, 5, 7], null), cat);
+  assert.equal(core.planSummary(plan, cat, 'en')[1], '1 of 3 steps is in the Parent plan.');
+  // Single-game plans.
+  plan = core.buildPlan(fakeAnswer(['speaking_LadderTalk'], [9], null), cat);
+  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['This game is in the Teacher plan.']);
+  assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['呢隻遊戲喺老師版。']);
+  plan = core.buildPlan(fakeAnswer(['phonics_LadderPhonics'], [9], null), cat);
+  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['This game is free.']);
+  assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['呢隻遊戲免費。']);
+});
+
+test('AI mode: the plan is built in code from the model\'s ids', async () => {
+  const r = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['writing_DetectivesNotebook', 'writing_ChainStory'] })), 'P5 student, writing a story, 45 mins');
+  assert.equal(r.source, 'ai');
+  const plan = core.buildPlan(r, cat);
+  assert.ok(plan && plan.steps.reduce((a, st) => a + st.min, 0) === 45);
+  assert.deepEqual(new Set(ids(plan).concat(plan.others.map((x) => x.id))), new Set(r.ids));
+});
+
+// ---------- plan link (Feature 2) ----------
+
+test('plan link: round trip, only ids, length, language and a marker; nothing typed', () => {
+  const ORIGIN = 'https://app.example.test';
+  const LINK = /^https:\/\/app\.example\.test\/library#llplan=([ms])(\d{0,3})([ez])((?:\.[A-Za-z0-9_]+(?:~[A-Za-z0-9_]+)*)+)$/;
+  let n = 0;
+  for (const q of questions.filter((x) => x.expect === 'picks' && !x.after)) {
+    const r = core.recommendRules(cat, q.text);
+    const plan = core.buildPlan(r, cat);
+    const link = core.planLink(ORIGIN, plan, q.lang);
+    const m = LINK.exec(link);
+    assert.ok(m, `${q.id}: ${link}`);
+    const parts = m[4].slice(1).split(/[.~]/);
+    assert.ok(parts.every((id) => cat.byId[id]), `${q.id}: only game ids`);
+    assert.equal(m[2], r.q.minutes == null ? '' : String(r.q.minutes));
+    // Nothing the teacher typed: no word of the question that is not part of a game id.
+    const words = (q.text.toLowerCase().match(/[a-z]{3,}/g) || []).filter((w) => !Object.keys(cat.byId).some((id) => id.toLowerCase().includes(w)));
+    const code = link.split('#llplan=')[1].toLowerCase();
+    for (const w of words) assert.ok(!code.includes(w), `${q.id}: "${w}" in the link`);
+    assert.doesNotMatch(link, /[^\x21-\x7e]/, `${q.id}: no Chinese or spaces`);
+    // Round trip.
+    const back = core.parsePlanCode(link.split('#llplan=')[1], cat);
+    assert.equal(back.kind, plan.kind, q.id);
+    assert.equal(back.minutes, plan.minutes, q.id);
+    assert.equal(back.lang, q.lang, q.id);
+    assert.deepEqual(ids(back), ids(plan), q.id);
+    assert.deepEqual(back.steps.map((st) => [st.role, st.min, st.name]), plan.steps.map((st) => [st.role, st.min, st.name]), q.id);
+    assert.deepEqual(back.others.map((x) => x.id || x.family), plan.others.map((x) => x.id || x.family), q.id);
+    n++;
+  }
+  assert.ok(n > 100);
+  // A sentence full of words that are not game words.
+  const plan = core.buildPlan(core.recommendRules(cat, 'Zebrafish Quokka Wombat age 8 phonics 30 min, my student Mei Ling'), cat);
+  const link = core.planLink(ORIGIN, plan, 'en');
+  for (const w of ['zebrafish', 'quokka', 'wombat', 'mei', 'ling', 'student']) assert.ok(!link.toLowerCase().includes(w), w);
+});
+
+test('plan link: unknown ids are left out; with none left there is no plan', () => {
+  assert.equal(core.parsePlanCode('m30e.nope_Game.also_Nope', cat), null);
+  assert.equal(core.parsePlanCode('x30e.phonics_LadderPhonics', cat), null, 'bad marker');
+  assert.equal(core.parsePlanCode('', cat), null);
+  assert.equal(core.parsePlanCode('m30e.<script>.phonics_LadderPhonics', cat).steps.length, 1);
+  const p = core.parsePlanCode('m30z.nope_Game.listening_NumberNinja.listening_AnnouncementStation', cat);
+  assert.equal(p.lang, 'zh');
+  assert.deepEqual(p.steps.map((st) => [st.role, st.item.id, st.min]), [['warmup', 'listening_NumberNinja', 10], ['main', 'listening_AnnouncementStation', 20]]);
+  // "s" with a first game that has no parts: shown as a list.
+  assert.equal(core.parsePlanCode('se.listening_NumberNinja', cat).kind, 'multi');
+  assert.equal(core.parsePlanCode('s45e.grammar_TenseStudio.grammar_Detective', cat).kind, 'single');
+});
+
+test('mailto: no recipient, the subject, the link and one line per step with the game title', () => {
+  const plan = core.buildPlan(core.recommendRules(cat, 'P5 student, writing a story, 45 mins'), cat);
+  const url = core.planLink('https://app.example.test', plan, 'en');
+  const mail = core.mailtoLink(cat, plan, url, 'en');
+  assert.match(mail, /^mailto:\?subject=/);
+  const q = new URLSearchParams(mail.slice('mailto:?'.length));
+  assert.equal(q.get('subject'), 'My Ladder Lessons lesson plan');
+  const body = q.get('body').split('\n');
+  assert.equal(body[0], url);
+  assert.deepEqual(body.slice(2), plan.steps.map((st, i) => `${i + 1}. ${core.T.en.roles[st.role]}: ${cat.byId[st.item.id].title} (${st.min} min)`));
+  const single = core.buildPlan(core.recommendRules(cat, 'Form 2 tenses 45 minutes'), cat);
+  const zh = new URLSearchParams(core.mailtoLink(cat, single, 'u', 'zh').slice('mailto:?'.length));
+  assert.equal(zh.get('body').split('\n')[2], '1. Tense Studio: Lessons（15 分鐘）'.replace('（', ' (').replace('）', ')'));
+});
+
+test('analytics: the plan events are fixed names in the allowlist', () => {
+  const { internals } = require(path.join(ROOT, 'src', 'll-assistant.js'));
+  for (const e of ['ll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link']) assert.ok(internals.EVENTS.includes(e), e);
+  assert.equal(internals.EVENTS.length, 11);
+});
 
 // ---------- AI mode post-processing with scripted models ----------
 
@@ -164,7 +518,7 @@ test('AI: the real model\'s recorded replies pass every fixed question after pos
   for (const q of questions.filter((x) => x.expect !== 'nothing-sent')) {
     const raw = q.after ? null : recorded[q.text];
     const client = { chat: () => { replayed += raw != null; return Promise.resolve({ text: raw == null ? '{"picks":[]}' : raw, ms: 1 }); } };
-    const { res, shown } = await runQuestion(core, q, (text, opts) => core.recommendAI(cat, client, text, opts));
+    const { res, shown } = await runQuestion(core, q, (text, opts) => core.recommendAI(cat, client, text, opts), cat);
     const c = checkQuestion(q, res, cat, shown);
     if (!c.ok) fails.push(`${q.id}: ${c.fails.join('; ')}`);
     if (res.modelInvalid && raw != null) fails.push(`${q.id}: recorded reply now rejected`);

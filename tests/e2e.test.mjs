@@ -26,7 +26,10 @@ const GAME = Object.fromEntries(source.games.map((g) => [g.id, g]));
 const PORT = 8000 + Math.floor(Math.random() * 900);
 const BASE = `http://127.0.0.1:${PORT}`;
 const DEMO = `${BASE}/demo.html`;
-const EVENTS = ['ll_ai_offered', 'll_download_started', 'll_download_finished', 'll_fallback_shown', 'll_game_click'];
+const EVENTS = ['ll_ai_offered', 'll_download_started', 'll_download_finished', 'll_fallback_shown', 'll_game_click',
+  'll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link'];
+const EVENT_RE = new RegExp(EVENTS.join('|'), 'g');
+const MB = Math.ceil(cat.model.bytes / 1048576);
 const TOKENS = Object.fromEntries((fs.readFileSync(path.join(ROOT, 'll-tokens.css'), 'utf8').match(/--[a-z0-9-]+:[^;]+/gi) || []).map((d) => [d.split(':')[0].slice(2), d.split(':').slice(1).join(':').trim()]));
 
 let server, browser;
@@ -90,6 +93,19 @@ async function openWidget(page, url = DEMO) {
   await page.waitForFunction(() => window.LLAssistant && document.querySelector('#ll-assistant .ll-launcher'));
   await page.locator('#ll-assistant .ll-launcher').click();
   await page.waitForFunction(() => { const s = LLAssistant.internals.state().ai; return s !== 'unknown' && s !== 'checking'; });
+}
+
+// The AI offer starts as one line; this opens the full offer card.
+async function expandOffer(page) {
+  if (!(await page.locator('#ll-assistant .ll-offer .ll-btn').count())) await page.locator('#ll-assistant .ll-offer .ll-link').click();
+}
+
+// The games in the order the lesson plan shows them: the steps (or the one
+// game of a single-game plan), then "Other games that fit".
+function planItems(turn) {
+  const p = turn.plan;
+  const ids = (p.kind === 'single' ? [p.item] : p.steps.map((st) => st.ids)).concat(p.others);
+  return ids.map((list) => turn.items.find((it) => (it.ids || [it.id])[0] === list[0]));
 }
 
 const lastBot = (page) => page.locator('#ll-assistant .ll-bot:not(.ll-thinking):not(.ll-intro)').last();
@@ -220,7 +236,9 @@ test('Keyword mode (WebGPU off): page load, header, every fixed question, cards,
       levels: [...c.querySelectorAll('.ll-chip')].map((b) => b.textContent.replace(/\s*↗\s*$/, '')),
     })));
     assert.equal(cards.length, turn.items.length);
-    turn.items.forEach((it, i) => {
+    const shown = planItems(turn);
+    assert.deepEqual(shown.map((it) => (it.ids || [it.id]).join()).sort(), turn.items.map((it) => (it.ids || [it.id]).join()).sort(), `${q.id}: the plan shows every game once`);
+    shown.forEach((it, i) => {
       const g = cat.byId[it.ids ? it.ids[0] : it.id];
       assert.equal(cards[i].name, it.ids ? 'Ladder Vocabulary' : g.title, q.id);
       assert.equal(cards[i].tier, TIER_LABEL[lang][g.tier], `${q.id}: plan label`);
@@ -235,6 +253,7 @@ test('Keyword mode (WebGPU off): page load, header, every fixed question, cards,
       if (!it.ids && cat.byId[it.id].level_min) assert.ok(cards[i].tags.some((t) => /A1|A2|B1|B2|C1|C2/.test(t)), `${q.id}: level tag`);
     });
     if (turn.kidNote) assert.equal(await el.locator('.ll-cards > li.ll-small').count(), 1);
+    assert.equal(await el.locator('.ll-pl-h').innerText(), lang === 'zh' ? '你嘅課堂安排' : 'Your lesson plan', `${q.id}: plan heading`);
   }
 
   // Game clicks have their own test ("Game clicks hand off ..."), with navigation.
@@ -343,7 +362,7 @@ test('Microsoft Clarity (real library) records the widget without the text, hash
   await page.evaluate(() => window.clarity('upgrade', 'test'));
   await page.waitForTimeout(800);
   // The five fixed event names (for example ll_game_click) are meant to be there.
-  const uploads = (await page.evaluate(() => window.__up.join('\n'))).replace(/ll_(ai_offered|download_started|download_finished|fallback_shown|game_click)/g, '');
+  const uploads = (await page.evaluate(() => window.__up.join('\n'))).replace(EVENT_RE, '');
   assert.ok(uploads.length > 1000, 'Clarity uploaded something');
   assert.ok(!uploads.includes('ladderlessons.com'), 'a game link reached Clarity');
   for (const q of asked) {
@@ -485,10 +504,12 @@ test('Capable device: size shown, nothing downloads before the click, failed dow
   const { context, page, requests } = await newPage({ fakeGpu: true });
   await openWidget(page);
   assert.equal(await page.evaluate(() => LLAssistant.internals.state().ai), 'offer');
+  // One number everywhere: the one-line offer and the button both show model.bytes (fix 2).
+  assert.equal(await page.locator('#ll-assistant .ll-offer .ll-link').innerText(), `Use on-device AI (${MB} MB)`);
+  await expandOffer(page);
   const btn = page.locator('#ll-assistant .ll-offer .ll-btn');
   const label = await btn.innerText();
-  assert.match(label, /^Download AI · \d+ MB · one-time download$/);
-  assert.ok(Number(label.match(/(\d+) MB/)[1]) >= 280, label);
+  assert.equal(label, `Download AI · ${MB} MB · one-time download`);
   assert.ok((await eventNames(page)).includes('ll_ai_offered'));
   await page.waitForTimeout(300);
   assert.ok(!requests.some((r) => /ll-worker\.js|web-llm\.js|params_shard|mlc-chat-config/.test(r.url)), 'downloaded before the click');
@@ -512,8 +533,10 @@ test('Capable device: size shown, nothing downloads before the click, failed dow
 test('Download shows progress and can be cancelled', async () => {
   const { context, page } = await newPage({ fakeGpu: true, worker: SLOW_WORKER });
   await openWidget(page);
+  await expandOffer(page);
   await page.locator('#ll-assistant .ll-offer .ll-btn').click();
   await page.waitForFunction(() => /Downloading AI · [1-9]\d?% · \d+ of \d+ MB/.test(document.querySelector('#ll-assistant .ll-progress-text')?.textContent || ''));
+  assert.match(await page.locator('#ll-assistant .ll-progress-text').innerText(), new RegExp(` of ${MB} MB$`), 'progress shows the same size');
   assert.ok(await page.locator('#ll-assistant .ll-bar span').evaluate((s) => parseFloat(s.style.width)) > 0);
   await page.locator('#ll-assistant .ll-offer button', { hasText: 'Cancel' }).click();
   assert.equal(await page.evaluate(() => LLAssistant.internals.state().ai), 'offer');
@@ -524,6 +547,7 @@ test('Download shows progress and can be cancelled', async () => {
 test('AI mode (fake model): free-first, lesson length, kid-themed order, fixed question, bad output, crash', async () => {
   const { context, page, errors } = await newPage({ fakeGpu: true, worker: FAKE_WORKER });
   await openWidget(page);
+  await expandOffer(page);
   await page.locator('#ll-assistant .ll-offer .ll-btn').click();
   await page.waitForFunction(() => LLAssistant.internals.state().ai === 'ready');
   assert.ok((await eventNames(page)).includes('ll_download_finished'));
@@ -883,7 +907,20 @@ test('Composer, header and conversation layout (B1-B5, C1-C10)', async () => {
     assert.ok(m.centred, `${tag}: button centred on a one-line text box (B2)`);
     assert.ok(m.sendH >= 44, 'button at least 44px');
     assert.equal(m.title[0], 'nowrap', 'C5: title on one line');
-    assert.equal(m.lock, `13px|400|balance|1px ${'rgb(229, 231, 235)'}`, `${tag}: lock line 13px normal weight, balanced; header line`);
+    assert.equal(m.lock, `13px|400|wrap|1px ${'rgb(229, 231, 235)'}`, `${tag}: lock line 13px normal weight, normal wrapping; header line`);
+    // Fix 3: the lock line uses the full width under the title; the close button sits on the title row only.
+    const h = await page.evaluate(() => {
+      const q = (s) => document.querySelector('#ll-assistant ' + s);
+      const span = q('.ll-privacy span'), r = document.createRange();
+      r.selectNodeContents(span);
+      const lines = [...r.getClientRects()];
+      const p = q('.ll-privacy').getBoundingClientRect(), pad = parseFloat(getComputedStyle(q('.ll-privacy')).paddingRight);
+      const title = q('.ll-title').getBoundingClientRect(), close = q('.ll-close').getBoundingClientRect();
+      return { first: lines[0].right, room: p.right - pad, lines: new Set(lines.map((l) => Math.round(l.top))).size, closeMid: (close.top + close.bottom) / 2, titleMid: (title.top + title.bottom) / 2, closeBottom: close.bottom, lockTop: p.top };
+    });
+    assert.ok(h.lines === 1 || h.room - h.first < 60, `${tag}: first line of the lock sentence ends ${Math.round(h.room - h.first)}px before the edge`);
+    assert.ok(Math.abs(h.closeMid - h.titleMid) <= 3, `${tag}: close button centred on the title row`);
+    assert.ok(h.closeBottom <= h.lockTop + 1, `${tag}: close button above the lock line`);
     assert.equal(m.scrollbar, 'thin|rgb(229, 231, 235) rgba(0, 0, 0, 0)', 'C6');
     assert.ok(m.intro, 'intro in the empty state');
     assert.equal(await page.getByRole('textbox', { name: 'Describe your student' }).count(), 1);
@@ -907,7 +944,8 @@ test('Composer, header and conversation layout (B1-B5, C1-C10)', async () => {
       const turns = [...document.querySelectorAll('#ll-assistant .ll-log > .ll-turn')];
       const cs = (n) => getComputedStyle(n);
       const you = document.querySelector('#ll-assistant .ll-you'), log = document.querySelector('#ll-assistant .ll-log').getBoundingClientRect();
-      const cards = [...turns[0].querySelectorAll('.ll-card')].map((c) => c.getBoundingClientRect());
+      const list = [...turns[0].querySelectorAll('.ll-cards')].find((l) => l.querySelectorAll(':scope > .ll-card').length > 1);
+      const cards = list ? [...list.querySelectorAll(':scope > .ll-card')].map((c) => c.getBoundingClientRect()) : [];
       return {
         turns: turns.length, kids: turns.map((t) => [...t.children].map((c) => c.classList.contains('ll-you') ? 'you' : 'bot').join(',')),
         gap: cs(turns[0]).rowGap, between: cs(turns[1]).borderTopWidth + ' ' + cs(turns[1]).borderTopColor + ' ' + (parseFloat(cs(turns[1]).marginTop) + parseFloat(cs(turns[1]).paddingTop)),
@@ -1231,5 +1269,475 @@ test('A lock pop-up that fades out does not leave the widget hidden (review 4)',
   await page.waitForFunction(() => document.getElementById('ll-assistant').hidden);
   await page.locator('#lock-close').click();
   await page.waitForFunction(() => !document.getElementById('ll-assistant').hidden, null, { timeout: 3000 });
+  await context.close();
+});
+
+
+// ---------- this round: first open, lesson plan, send to laptop, AI note gap ----------
+
+const SHOTS = path.join(ROOT, 'tests', 'results', 'screenshots');
+// The site's Google Fonts, fetched by the test runner (TLS checked there) when online.
+const siteFonts = (page) => page.route(/fonts\.(googleapis|gstatic)\.com/, async (r) => { try { await r.fulfill({ response: await r.fetch() }); } catch (e) { await r.abort(); } });
+// For a screenshot of a whole plan: the panel grows to fit (screenshots only).
+const STRETCH = '#ll-assistant .ll-panel{height:auto!important;max-height:none!important}#ll-assistant .ll-log{overflow:visible!important}';
+async function shot(page, name, full) {
+  await page.evaluate(() => document.fonts.ready);
+  if (full) await page.addStyleTag({ content: STRETCH });
+  await page.waitForTimeout(150);
+  const file = path.join(SHOTS, name + '.png');
+  if (full) await page.locator('#ll-assistant .ll-panel').screenshot({ path: file });
+  else await page.screenshot({ path: file });
+  assert.ok(fs.statSync(file).size > 5000, name);
+  if (full) await page.evaluate(() => [...document.querySelectorAll('style')].pop().remove());
+}
+
+test('First open: the AI offer is one line on every screen size; all three examples sit above the composer (fix 1)', async () => {
+  fs.mkdirSync(SHOTS, { recursive: true });
+  for (const viewport of [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 1280, height: 800 }]) {
+    const { context, page } = await newPage({ fakeGpu: true, viewport });
+    await siteFonts(page);
+    await openWidget(page, DEMO + '?site=1');
+    const tag = `${viewport.width}px`;
+    assert.equal(await page.evaluate(() => LLAssistant.internals.state().ai), 'offer');
+    const offer = await page.locator('#ll-assistant .ll-offer').evaluate((o) => ({ min: o.classList.contains('ll-offer-min'), buttons: [...o.querySelectorAll('button')].map((b) => b.textContent) }));
+    assert.deepEqual(offer, { min: true, buttons: [`Use on-device AI (${MB} MB)`] }, `${tag}: one line`);
+    await page.evaluate(() => document.fonts.ready);
+    const fit = await page.evaluate(() => {
+      const comp = document.querySelector('#ll-assistant .ll-composer').getBoundingClientRect(), log = document.querySelector('#ll-assistant .ll-log').getBoundingClientRect();
+      return [...document.querySelectorAll('#ll-assistant .ll-intro .ll-chip')].map((c) => { const r = c.getBoundingClientRect(); return r.top >= log.top && r.bottom <= log.bottom && r.bottom <= comp.top; });
+    });
+    assert.equal(fit.length, 3);
+    if (viewport.width >= 375) assert.deepEqual(fit, [true, true, true], `${tag}: every example chip fully visible above the composer`);
+    await shot(page, `first-open-${viewport.width}`);
+    // Tapping the line opens the full offer; a message closes it again.
+    await page.locator('#ll-assistant .ll-offer .ll-link').click();
+    assert.equal(await page.locator('#ll-assistant .ll-offer .ll-btn').innerText(), `Download AI · ${MB} MB · one-time download`);
+    await ask(page, 'Age 8 phonics');
+    assert.equal(await page.locator('#ll-assistant .ll-offer').evaluate((o) => o.classList.contains('ll-offer-min')), true);
+    await context.close();
+  }
+});
+
+test('Lesson plan: heading, summary, steps with minutes, parts, other games, kid note, follow-ups (Feature 1)', async () => {
+  const { context, page, errors } = await newPage({ viewport: { width: 1280, height: 800 } });
+  await openWidget(page);
+  // 3 games, 45 minutes, Main without parts: Warm-up / Main activity / Wrap-up with 10/25/10.
+  let r = await ask(page, 'P5 student, writing a story, 45 mins');
+  assert.equal(r.turn.plan.kind, 'multi');
+  assert.equal(await r.el.locator('.ll-pl-h').innerText(), 'Your lesson plan');
+  assert.equal(await r.el.locator('.ll-pl-t').innerText(), 'Suggested timing');
+  assert.deepEqual(await r.el.locator('.ll-pl-st').allInnerTexts(), ['Warm-up · 10 min', 'Main activity · 25 min', 'Wrap-up · 10 min']);
+  assert.deepEqual(await r.el.locator('.ll-pl-s').allInnerTexts(), ['All 3 steps are in the Parent plan.']);
+  assert.equal(await r.el.locator('.ll-pl-a').innerText(), 'Every game can be stopped at any time, so adjust as you go.');
+  // Each step is a full card: the whole card opens the game (paid: the library).
+  assert.equal(await r.el.locator('.ll-pl .ll-card button.ll-card-title').count(), 3);
+  // 2 games, no length: labels, no minutes, no "Suggested timing".
+  r = await ask(page, 'P3 listening');
+  assert.deepEqual(await r.el.locator('.ll-pl-st').allInnerTexts(), ['Warm-up', 'Main activity']);
+  assert.equal(await r.el.locator('.ll-pl-t').count(), 0);
+  assert.ok(!(await r.el.innerText()).match(/\d+ min/), 'no minutes without a stated length');
+  // Single-game plan in Chinese: English part names as in the game (2A), 1B join, other games that fit.
+  r = await ask(page, '中二 時態 45分鐘');
+  assert.equal(r.turn.plan.kind, 'single');
+  assert.equal(await r.el.locator('.ll-pl-h').innerText(), '你嘅課堂安排');
+  assert.deepEqual(await r.el.locator('.ll-pl-pn').allInnerTexts(), ['Lessons', 'Find the Clue', 'Fill in the Blanks', 'Sentence Correction']);
+  assert.deepEqual(await r.el.locator('.ll-pl-pm').allInnerTexts(), ['15 分鐘', '10 分鐘', '10 分鐘', '10 分鐘']);
+  assert.equal(await r.el.locator('.ll-pl-pl').innerText(), '建議時間');
+  assert.equal(await r.el.locator('.ll-pl-o').innerText(), '其他啱用嘅遊戲');
+  assert.equal(await r.el.locator('.ll-pl-a').innerText(), '每隻遊戲都可以隨時停，時間可以自己調。');
+  assert.deepEqual(await r.el.locator('.ll-pl-s').allInnerTexts(), ['呢隻遊戲喺家長版。']);
+  r = await ask(page, 'adult business english');
+  assert.deepEqual(await r.el.locator('.ll-pl-pn').allInnerTexts(), ['Warm-up', 'Words', 'Discuss', 'Practice + Real Life'], '1B');
+  assert.equal(await r.el.locator('.ll-pl-pl').innerText(), 'Steps');
+  // Kid note (6A): one small line right before the first kid-themed card.
+  assert.equal(r.turn.kidNote, true, 'adult business english has kid-themed Money English games');
+  const before = await r.el.evaluate((bot) => { const n = bot.querySelector('.ll-cards > li.ll-small'); return n && n.nextElementSibling && n.nextElementSibling.textContent.includes('Kid-themed'); });
+  assert.ok(before, 'kid note right before the first kid-themed card');
+  assert.equal(await r.el.locator('.ll-cards > li.ll-small').count(), 1);
+  // Follow-ups rebuild the plan with new games only.
+  const shown = r.turn.ids;
+  r = await ask(page, 'any other recommendations');
+  assert.ok(r.turn.plan, 'a follow-up is a plan too');
+  assert.ok(r.turn.ids.every((id) => !shown.includes(id)), 'no game shown twice');
+  // The plan event: fixed name and payload.
+  // A Chinese 3-game plan: the step labels in Chinese.
+  r = await ask(page, '小五學生 寫故事 45分鐘');
+  assert.deepEqual(await r.el.locator('.ll-pl-st').allInnerTexts(), ['暖身 · 10 分鐘', '主要活動 · 25 分鐘', '總結 · 10 分鐘']);
+  assert.equal(await r.el.locator('.ll-pl-t').innerText(), '建議時間');
+  const g = (await calls(page)).gtag.filter((c) => c[1] === 'll_plan_shown');
+  assert.equal(g.length, 6);
+  for (const c of g) assert.deepEqual(c, ['event', 'll_plan_shown', { event_category: 'll_assistant' }]);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('Send this plan, no host form: email via the mail app, copy link, share on phones; nothing in the page (Feature 2)', async () => {
+  const { context, page, errors, requests } = await newPage({ viewport: { width: 375, height: 667 } });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
+  await openWidget(page);
+  const r = await ask(page, 'P5 student, writing a story, 45 mins');
+  const n0 = requests.length;
+  await r.el.locator('.ll-sh-b').click();
+  assert.equal(await r.el.locator('.ll-sh-b').innerText(), 'Send this plan to my laptop');
+  assert.equal(await r.el.locator('.ll-sh-b').getAttribute('aria-expanded'), 'true');
+  assert.deepEqual(await r.el.locator('.ll-sh-r button').allInnerTexts(), ['Email it to myself', 'Copy link'], 'no Share on a desktop browser');
+  assert.equal(await r.el.locator('.ll-sh-n').innerText(), 'This uses your own mail app. Nothing is sent to Ladder Lessons.');
+  // The plan stays on screen; nothing is blocked behind the panel.
+  assert.equal(await r.el.locator('.ll-pl .ll-card').count(), 3);
+  // Copy: the link in the clipboard, "Copied" for 2 seconds.
+  await r.el.locator('.ll-sh-r button', { hasText: 'Copy link' }).click();
+  await page.waitForFunction(() => [...document.querySelectorAll('#ll-assistant .ll-sh-r button')].some((b) => b.textContent === 'Copied'));
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(link, new RegExp('^' + BASE.replace(/[.]/g, '\\.') + '/library#llplan=m45e\\.writing_[A-Za-z]+\\.writing_[A-Za-z]+\\.writing_[A-Za-z]+$'));
+  const back = core.parsePlanCode(link.split('#llplan=')[1], cat);
+  assert.deepEqual(back.steps.map((st) => st.item.id), r.turn.plan.steps.map((st) => st.ids[0]));
+  await page.waitForTimeout(1300);
+  assert.ok((await r.el.locator('.ll-sh-r button').allInnerTexts()).includes('Copied'), '"Copied" still shown after about 1.5 s');
+  await page.waitForFunction(() => [...document.querySelectorAll('#ll-assistant .ll-sh-r button')].map((b) => b.textContent).join() === 'Email it to myself,Copy link', null, { timeout: 2000 });
+  // Email: a button, no mailto address anywhere in the page.
+  await r.el.locator('.ll-sh-r button', { hasText: 'Email it to myself' }).click();
+  await page.waitForTimeout(200);
+  const html = await page.evaluate(() => document.getElementById('ll-assistant').outerHTML);
+  assert.ok(!/mailto|llplan|href=/.test(html), 'no address or link in the widget DOM');
+  // The only "request" is the hand-off to the mail app: mailto with no recipient, the link and the steps.
+  const extra = requests.slice(n0).map((x) => x.url);
+  assert.equal(extra.length, 1, 'nothing sent anywhere: ' + extra.join(', '));
+  assert.equal(decodeURIComponent(extra[0]), decodeURIComponent(core.mailtoLink(cat, back, link, 'en')));
+  assert.match(extra[0], /^mailto:\?subject=My%20Ladder%20Lessons%20lesson%20plan&body=/);
+  const ev = await eventNames(page);
+  for (const e of ['ll_plan_send_open', 'll_plan_send_copy', 'll_plan_send_email']) assert.ok(ev.includes(e), e);
+  for (const c of (await calls(page)).gtag) assert.deepEqual(c, ['event', c[1], { event_category: 'll_assistant' }]);
+  await shot(page, 'send-panel-fallback-375');
+  assert.deepEqual(errors, []);
+  await context.close();
+
+  // A phone: Share opens the share sheet with the link.
+  const phone = await newPage({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', viewport: { width: 375, height: 667 } });
+  await phone.context.addInitScript(() => { window.__shared = []; navigator.share = (d) => { window.__shared.push(d); return Promise.resolve(); }; });
+  await openWidget(phone.page);
+  const p = await ask(phone.page, 'Age 9 writing 30 minutes');
+  await p.el.locator('.ll-sh-b').click();
+  await p.el.locator('.ll-sh-r button', { hasText: 'Share' }).click();
+  const shared = await phone.page.evaluate(() => window.__shared);
+  assert.equal(shared.length, 1);
+  assert.match(shared[0].url, /\/library#llplan=s30e\.writing_RolePlayWriting\./);
+  assert.ok((await eventNames(phone.page)).includes('ll_plan_send_share'));
+  await phone.context.close();
+});
+
+test('Send this plan, host form: sendPlan called once, its form first, copy line under it, "Sent" after success (Feature 2)', async () => {
+  const { context, page, errors } = await newPage({ viewport: { width: 375, height: 667 } });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
+  await openWidget(page, DEMO + '?host=1');
+  const r = await ask(page, 'Form 2 tenses 45 minutes');
+  await r.el.locator('.ll-sh-b').click();
+  const calls1 = await page.evaluate(() => window.__hostSendPlan);
+  assert.equal(calls1.length, 1, 'sendPlan called once');
+  // Exactly what the spec hands over: the link and an empty mount (plus lang and done). Nothing typed.
+  assert.deepEqual(calls1[0].keys, ['done', 'lang', 'mount', 'url']);
+  assert.equal(calls1[0].mountEmpty, true, 'the mount is empty when sendPlan is called');
+  for (const tok of queryTokens('Form 2 tenses 45 minutes').filter((t) => !/^\d+$/.test(t) && !['tenses'].includes(t))) assert.ok(!containsToken(JSON.stringify(calls1[0]), tok), tok);
+  // 2.10: the plan stays on screen with the host form open.
+  assert.equal(await r.el.locator('.ll-pl .ll-card').count(), 3);
+  assert.ok(await r.el.locator('.ll-pl .ll-card').first().isVisible());
+  assert.match(calls1[0].url, new RegExp('^' + BASE.replace(/[.]/g, '\\.') + '/library#llplan=s45e\\.grammar_TenseStudio(\\.[A-Za-z0-9_~]+){0,2}$'));
+  // The host's form comes first, then "or copy the link", then the note.
+  const order = await r.el.locator('.ll-sh-p').evaluate((p) => [...p.children].filter((c) => getComputedStyle(c).display !== 'none').map((c) => c.className || c.tagName));
+  assert.deepEqual(order, ['ll-sh-m', 'll-link', 'll-small ll-sh-n']);
+  assert.equal(await r.el.locator('.ll-sh-p .ll-link').innerText(), 'or copy the link');
+  assert.equal(await r.el.locator('.ll-sh-n').innerText(), 'This sends your email address and this list of games to Ladder Lessons. Nothing you typed is included.');
+  assert.equal(await r.el.locator('.ll-sh-r').count(), 0, 'no mail-app button in host mode');
+  assert.ok(!/mailto/.test(await page.evaluate(() => document.getElementById('ll-assistant').outerHTML)));
+  await shot(page, 'send-panel-host-375');
+  // The host's own form gets its events (the widget does not stop them).
+  await page.locator('.ll-sh-m input').fill('teacher@example.com');
+  assert.equal(await page.locator('.ll-sh-m input').inputValue(), 'teacher@example.com');
+  await page.locator('.ll-sh-m button').click();
+  await page.waitForFunction(() => (document.querySelector('#ll-assistant .ll-sh-d') || {}).textContent === 'Sent. Check your inbox on your laptop.');
+  assert.equal((await page.evaluate(() => window.__hostSendPlan)).length, 1, 'still one call');
+  // Closing and opening the panel keeps the form and "Sent", and does not call sendPlan again.
+  await r.el.locator('.ll-sh-b').click();
+  assert.equal(await r.el.locator('.ll-sh-p').isVisible(), false);
+  await r.el.locator('.ll-sh-b').click();
+  assert.equal(await r.el.locator('.ll-sh-d').innerText(), 'Sent. Check your inbox on your laptop.');
+  assert.equal(await page.locator('.ll-sh-m input').inputValue(), 'teacher@example.com');
+  assert.equal((await page.evaluate(() => window.__hostSendPlan)).length, 1, 'one call per plan');
+  const ev = await eventNames(page);
+  assert.equal(ev.filter((e) => e === 'll_plan_send_email').length, 1);
+  // Nothing typed in the host form reaches the widget's analytics.
+  assert.ok(!JSON.stringify(await calls(page)).includes('teacher@example.com'));
+  // "or copy the link"
+  await r.el.locator('.ll-sh-p .ll-link').click();
+  await page.waitForFunction(() => document.querySelector('#ll-assistant .ll-sh-p .ll-link').textContent === 'Copied');
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), calls1[0].url);
+  // A host that returns a Promise instead of calling done().
+  await page.evaluate(() => { window.__p = 0; window.LLAssistantHost = { sendPlan: () => { window.__p++; return new Promise((res) => setTimeout(res, 100)); } }; });
+  const r2 = await ask(page, 'P3 listening');
+  await r2.el.locator('.ll-sh-b').click();
+  await page.waitForFunction(() => [...document.querySelectorAll('#ll-assistant .ll-sh-d')].some((d) => d.textContent === 'Sent. Check your inbox on your laptop.'));
+  assert.equal(await page.evaluate(() => window.__p), 1);
+  // A host form that fails: the mail app, copy and share instead, with the mail-app note.
+  await page.evaluate(() => { window.LLAssistantHost = { sendPlan: () => { throw new Error('form broke'); } }; });
+  const r3 = await ask(page, 'Age 9 writing 30 minutes');
+  await r3.el.locator('.ll-sh-b').click();
+  assert.deepEqual(await r3.el.locator('.ll-sh-r button').allInnerTexts(), ['Email it to myself', 'Copy link']);
+  assert.equal(await r3.el.locator('.ll-sh-n').innerText(), 'This uses your own mail app. Nothing is sent to Ladder Lessons.');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('A plan link opens the widget with the saved plan, never runs the model, skips unknown games (Feature 2)', async () => {
+  const code = 'm45z.writing_RolePlayWriting.nope_NotAGame.writing_ChainStory.writing_DetectivesNotebook';
+  let { context, page, requests, errors } = await newPage({ fakeGpu: true, worker: FAKE_WORKER, viewport: { width: 1280, height: 800 } });
+  await siteFonts(page);
+  await page.goto(`${BASE}/library#llplan=${code}`);
+  await page.waitForFunction(() => document.querySelector('#ll-assistant .ll-pl-h'));
+  assert.equal(await page.locator('#ll-assistant .ll-pl-h').innerText(), '你儲存咗嘅課堂安排');
+  const turns = await page.evaluate(() => LLAssistant.internals.turns());
+  assert.equal(turns.length, 1);
+  assert.deepEqual(turns[0].plan.steps.map((st) => [st.role, st.ids[0], st.min]), [['warmup', 'writing_RolePlayWriting', 10], ['main', 'writing_ChainStory', 25], ['wrapup', 'writing_DetectivesNotebook', 10]]);
+  assert.equal(await page.locator('#ll-assistant .ll-title').innerText(), '課堂遊戲小助手', 'the plan\'s language');
+  assert.ok((await eventNames(page)).includes('ll_plan_opened_from_link'));
+  await page.waitForTimeout(300);
+  assert.ok(!requests.some((r) => /ll-worker\.js|web-llm\.js/.test(r.url)), 'the model never runs for a saved plan');
+  await shot(page, 'saved-plan-zh-1280', true);
+  assert.deepEqual(errors, []);
+  await context.close();
+
+  // No valid game: the usual empty state, once the catalogue has loaded.
+  ({ context, page } = await newPage());
+  await page.goto(`${DEMO}#llplan=m30e.nope_A.nope_B`);
+  await page.waitForFunction(() => window.LLAssistant && LLAssistant.internals.state().open && LLAssistant.internals.state().cat);
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#ll-assistant .ll-intro').isVisible(), true);
+  assert.equal(await page.evaluate(() => LLAssistant.internals.turns().length), 0);
+  // A link opened on a page that is already there (hash change).
+  await page.evaluate(() => { location.hash = 'llplan=s45e.grammar_TenseStudio.grammar_Detective'; });
+  await page.waitForFunction(() => document.querySelector('#ll-assistant .ll-pl-h'));
+  assert.equal(await page.locator('#ll-assistant .ll-pl-h').innerText(), 'Your saved lesson plan');
+  assert.equal((await page.evaluate(() => LLAssistant.internals.turns()))[0].plan.kind, 'single');
+  await context.close();
+});
+
+test('The AI note sits 16px below the bottom of the card shadow (visual 7)', async () => {
+  const { context, page } = await newPage({ fakeGpu: true, worker: FAKE_WORKER, viewport: { width: 375, height: 667 } });
+  await siteFonts(page);
+  await openWidget(page, DEMO + '?site=1');
+  await expandOffer(page);
+  await page.locator('#ll-assistant .ll-offer .ll-btn').click();
+  await page.waitForFunction(() => LLAssistant.internals.state().ai === 'ready');
+  for (const text of ['Age 9 listening 30 min', 'Form 2 tenses 45 minutes']) {
+    const r = await ask(page, text);
+    assert.equal(r.turn.source, 'ai');
+    // Measured at rest: no card hovered or lifted.
+    await page.mouse.move(1, 1);
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.waitForTimeout(250);
+    const m = await r.el.evaluate((bot) => {
+      const foot = bot.querySelector('.ll-foot'), list = foot.previousElementSibling;
+      const cards = list.querySelectorAll(':scope > .ll-card'), card = cards[cards.length - 1];
+      // The shadow's lowest edge: y offset + blur + spread of each shadow layer.
+      const layers = getComputedStyle(card).boxShadow.split(/,(?![^(]*\))/).map((l) => (l.match(/-?\d+(\.\d+)?px/g) || []).map(parseFloat));
+      const reach = Math.max(0, ...layers.map((n) => (n[1] || 0) + (n[2] || 0) + (n[3] || 0)));
+      return { gap: foot.getBoundingClientRect().top - (card.getBoundingClientRect().bottom + reach), reach, marginTop: getComputedStyle(foot).marginTop };
+    });
+    assert.equal(m.marginTop, '16px');
+    assert.ok(m.reach >= 4, 'card shadow measured: ' + m.reach);
+    assert.ok(Math.abs(m.gap - 16) <= 0.5, `${text}: gap from the bottom of the shadow ${m.gap}px`);
+  }
+  await page.locator('#ll-assistant .ll-foot').last().scrollIntoViewIfNeeded();
+  await shot(page, 'ai-note-gap-375');
+  await context.close();
+});
+
+test('Screenshots of this round (375 and 1280, site fonts): plans in English and Chinese, send panels', async () => {
+  for (const width of [375, 1280]) {
+    const { context, page } = await newPage({ viewport: { width, height: width < 500 ? 667 : 800 } });
+    await siteFonts(page);
+    await openWidget(page, DEMO + '?site=1&llai=off');
+    await ask(page, 'P5 student, writing a story, 45 mins');
+    await shot(page, `plan-3-steps-minutes-en-${width}`);
+    await shot(page, `plan-3-steps-minutes-en-${width}-full`, true);
+    await ask(page, 'P3 listening');
+    await shot(page, `plan-2-steps-no-minutes-${width}-full`, true);
+    await ask(page, '中二 時態 45分鐘');
+    await shot(page, `plan-single-zh-${width}`);
+    await shot(page, `plan-single-zh-${width}-full`, true);
+    await lastBot(page).locator('.ll-sh-b').click();
+    await shot(page, `send-panel-fallback-zh-${width}-full`, true);
+    await context.close();
+    const host = await newPage({ viewport: { width, height: width < 500 ? 667 : 800 } });
+    await siteFonts(host.page);
+    await openWidget(host.page, DEMO + '?site=1&llai=off&host=1');
+    await ask(host.page, 'Age 9 writing 30 minutes');
+    await lastBot(host.page).locator('.ll-sh-b').click();
+    await shot(host.page, `send-panel-host-en-${width}-full`, true);
+    await host.context.close();
+  }
+});
+
+// ---------- review round 5 ----------
+
+test('Small talk: a short polite reply, the open question stays open, its chips stay active (C6)', async () => {
+  const { context, page } = await newPage({ viewport: { width: 375, height: 667 } });
+  await openWidget(page);
+  await ask(page, 'Age 8');
+  let r = await ask(page, 'thanks');
+  assert.equal(r.turn.kind, 'smalltalk');
+  assert.equal(r.text, 'You’re welcome. Ask me again any time.');
+  assert.equal(await page.locator('#ll-assistant .ll-bot p', { hasText: 'Which skill do you want to practise?' }).count(), 1, 'the question is not repeated');
+  // The reply is on screen.
+  assert.ok(await r.el.evaluate((n) => { const l = n.closest('.ll-log').getBoundingClientRect(), b = n.getBoundingClientRect(); return b.top >= l.top && b.bottom <= l.bottom; }), 'reply visible');
+  // The question is still open: a chip still works.
+  const chips = page.locator('#ll-assistant .ll-chip:has(.ll-num)');
+  assert.equal(await chips.first().isDisabled(), false);
+  r = await ask(page, 'ok');
+  assert.equal(r.text, 'Sure. Ask me again any time.');
+  // In Chinese: the language switch redraws the conversation; the chips stay active.
+  r = await ask(page, '多謝');
+  assert.equal(r.text, '唔使客氣，有需要再問我。');
+  assert.equal(await chips.first().isDisabled(), false, 'chips of the open question stay active after a redraw');
+  r = await ask(page, '2');
+  assert.equal(r.turn.kind, 'picks');
+  assert.ok(r.turn.ids.every((id) => cat.byId[id].skill === 'writing'), 'choice 2 (writing) answers the question asked before the small talk');
+  await context.close();
+});
+
+test('A plan link on an open conversation: its own group, the old question closed, the model never asked (Feature 2)', async () => {
+  const { context, page } = await newPage({ fakeGpu: true, worker: FAKE_WORKER, viewport: { width: 1280, height: 800 } });
+  // Count every message to the model worker.
+  await context.addInitScript(() => {
+    window.__chats = 0;
+    const post = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (m) { if (m && m.type === 'chat') window.__chats++; return post.apply(this, arguments); };
+  });
+  await openWidget(page);
+  await expandOffer(page);
+  await page.locator('#ll-assistant .ll-offer .ll-btn').click();
+  await page.waitForFunction(() => LLAssistant.internals.state().ai === 'ready');
+  await ask(page, 'Age 8');
+  const before = await page.evaluate(() => window.__chats);
+  await page.evaluate(() => { location.hash = 'llplan=m30e.listening_NumberNinja.listening_AnnouncementStation'; });
+  await page.waitForFunction(() => document.querySelector('#ll-assistant .ll-pl-h'));
+  assert.equal(await page.locator('#ll-assistant .ll-pl-h').innerText(), 'Your saved lesson plan');
+  assert.equal(await page.evaluate(() => window.__chats), before, 'no message to the model for a saved plan');
+  const groups = await page.evaluate(() => [...document.querySelectorAll('#ll-assistant .ll-log > .ll-turn')].map((t) => [...t.children].map((c) => c.classList.contains('ll-you') ? 'you' : (c.querySelector('.ll-pl') ? 'plan' : 'bot')).join(',')));
+  assert.deepEqual(groups, ['you,bot', 'plan'], 'the saved plan is its own group');
+  // The old "Which skill?" question is closed: "2" is a new message, not choice 2.
+  const r = await ask(page, '2');
+  assert.notEqual(r.turn.kind, 'picks');
+  await context.close();
+});
+
+test('Clarity (real library) with the site\'s email form inside the widget: no fingerprint of the typed email (privacy)', async () => {
+  const { context, page } = await newPage();
+  await context.addInitScript(() => {
+    window.__up = [];
+    window.clarity = function () { (window.clarity.q = window.clarity.q || []).push(arguments); };
+    window.clarity('start', { projectId: 'll-test', delay: 100, upload: (p) => window.__up.push(typeof p === 'string' ? p : JSON.stringify(p)) });
+    window.__hostSends = [];
+    window.LLAssistantHost = { sendPlan: (o) => {
+      const input = document.createElement('input'); input.type = 'email';
+      const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Send';
+      // The form reads the address on click, as the widget's README says.
+      btn.addEventListener('click', () => { window.__hostSends.push(input.value); o.done(); });
+      o.mount.appendChild(input); o.mount.appendChild(btn);
+    } };
+  });
+  await context.route('**/clarity-host.html', (r) => r.fulfill({ contentType: 'text/html', body:
+    '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title></head><body><p>x</p>' +
+    '<script src="/dist/ll-assistant/ll-assistant.js" defer></script></body></html>' }));
+  await page.goto(`${BASE}/clarity-host.html`);
+  await page.addScriptTag({ path: CLARITY_JS });
+  await page.waitForFunction(() => window.LLAssistant && document.querySelector('#ll-assistant .ll-launcher'));
+  await page.locator('#ll-assistant .ll-launcher').click();
+  await page.waitForFunction(() => LLAssistant.internals.state().ai === 'rules');
+  await page.waitForTimeout(1000);
+  const r = await ask(page, 'Form 2 tenses 45 minutes');
+  await r.el.locator('.ll-sh-b').click();
+  const email = 'teacher.chan@school.example.org';
+  await page.locator('#ll-assistant .ll-sh-m input').click();
+  await page.keyboard.type(email, { delay: 0 });
+  await page.locator('#ll-assistant .ll-sh-m button').click();
+  assert.deepEqual(await page.evaluate(() => window.__hostSends), [email], 'the host form still works');
+  await page.waitForFunction(() => (document.querySelector('#ll-assistant .ll-sh-d') || {}).textContent === 'Sent. Check your inbox on your laptop.');
+  await page.locator('#ll-assistant .ll-close').click();
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => window.clarity('upgrade', 'test'));
+  await page.waitForTimeout(800);
+  const uploads = await page.evaluate(() => window.__up.join('\n'));
+  assert.ok(uploads.length > 1000, 'Clarity uploaded something');
+  assert.ok(!uploads.includes('"' + clarityHash(email, 28) + '"'), 'a fingerprint of the typed email reached Clarity');
+  for (const part of ['teacher', 'chan', 'school.example']) assert.ok(!uploads.includes(part), `"${part}" reached Clarity`);
+  await context.close();
+});
+
+test('The send options and a small-talk reply come into view on a phone-size screen (review 5)', async () => {
+  for (const host of [false, true]) {
+    const { context, page } = await newPage({ viewport: { width: 375, height: 667 } });
+    await openWidget(page, DEMO + (host ? '?host=1' : ''));
+    const r = await ask(page, 'Age 7, phonics, 45 min');
+    await r.el.locator('.ll-sh-b').scrollIntoViewIfNeeded();
+    await r.el.locator('.ll-sh-b').click();
+    await page.waitForTimeout(250);
+    const target = host ? '.ll-sh-m input' : '.ll-sh-r button';
+    const seen = await page.evaluate((sel) => {
+      const l = document.querySelector('#ll-assistant .ll-log').getBoundingClientRect();
+      const n = [...document.querySelectorAll('#ll-assistant ' + sel)].pop().getBoundingClientRect();
+      return n.top >= l.top && n.bottom <= l.bottom;
+    }, target);
+    assert.ok(seen, `${host ? 'host form' : 'Email it to myself'} visible after the click`);
+    await context.close();
+  }
+});
+
+test('Chinese send panel wording, both modes (spec 2.1, 2.4, 2.5, 2.9, 2.11)', async () => {
+  let { context, page } = await newPage({ viewport: { width: 375, height: 667 } });
+  await openWidget(page);
+  let r = await ask(page, '小五學生 寫故事 45分鐘');
+  assert.equal(await r.el.locator('.ll-sh-b').innerText(), '將呢堂課傳去我部電腦');
+  await r.el.locator('.ll-sh-b').click();
+  assert.deepEqual(await r.el.locator('.ll-sh-r button').allInnerTexts(), ['寄畀自己', '複製連結']);
+  assert.equal(await r.el.locator('.ll-sh-n').innerText(), '呢度用你自己嘅 email app，唔會有嘢傳送畀 Ladder Lessons。');
+  await context.close();
+  ({ context, page } = await newPage({ viewport: { width: 375, height: 667 } }));
+  await openWidget(page, DEMO + '?host=1');
+  r = await ask(page, '小五學生 寫故事 45分鐘');
+  await r.el.locator('.ll-sh-b').click();
+  assert.equal(await r.el.locator('.ll-sh-p .ll-link').innerText(), '或者複製連結');
+  assert.equal(await r.el.locator('.ll-sh-n').innerText(), '呢度會將你嘅 email 同呢張遊戲清單傳送畀 Ladder Lessons，唔包括你打過嘅字。');
+  await page.locator('.ll-sh-m input').fill('a@b.example');
+  await page.locator('.ll-sh-m button').click();
+  await page.waitForFunction(() => (document.querySelector('#ll-assistant .ll-sh-d') || {}).textContent === '已寄出，喺電腦開 email 就見到。');
+  assert.match((await page.evaluate(() => window.__hostSendPlan))[0].url, /#llplan=m45z\./, 'the link carries the language');
+  await context.close();
+});
+
+test('The root page sends you to demo.html?site=1 (visual 8)', async () => {
+  const { context, page } = await newPage();
+  await page.goto(`${BASE}/`);
+  await page.waitForURL(/\/demo\.html\?site=1$/);
+  await page.waitForFunction(() => window.LLAssistant && document.querySelector('link[href="ll-tokens.css"]'));
+  await context.close();
+});
+
+test('Cancelling a start from the cache keeps the one size on the offer (fix 2)', async () => {
+  const { context, page } = await newPage({ fakeGpu: true, worker: SLOW_WORKER });
+  await page.goto(DEMO);
+  await page.waitForFunction(() => window.LLAssistant);
+  await page.evaluate(async (m) => {
+    const put = async (name, url, body) => (await caches.open(name)).put(url, new Response(body));
+    await put('webllm/model', m.url + 'tensor-cache.json', JSON.stringify({ records: [{ dataPath: 'params_shard_0.bin', nbytes: 1 }] }));
+    await put('webllm/model', m.url + 'params_shard_0.bin', 'x');
+    await put('webllm/model', m.url + 'tokenizer.json', '{}');
+    await put('webllm/config', m.url + 'mlc-chat-config.json', '{}');
+    await put('webllm/wasm', m.lib, 'x');
+  }, cat.model);
+  await page.locator('#ll-assistant .ll-launcher').click();
+  await page.waitForFunction(() => LLAssistant.internals.state().ai === 'starting');
+  await page.locator('#ll-assistant .ll-offer button', { hasText: 'Cancel' }).click();
+  assert.equal(await page.locator('#ll-assistant .ll-offer .ll-link').innerText(), `Use on-device AI (${MB} MB)`);
+  await expandOffer(page);
+  assert.equal(await page.locator('#ll-assistant .ll-offer .ll-btn').innerText(), `Download AI · ${MB} MB · one-time download`);
   await context.close();
 });

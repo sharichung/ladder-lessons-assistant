@@ -22,6 +22,9 @@ export function startServer(port = 8080, root = ROOT) {
     let file = path.normalize(path.join(root, decodeURIComponent(url.pathname)));
     if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
     if (url.pathname === '/') file = path.join(root, 'index.html');
+    // A plan link ("Send this plan to my laptop") points at /library on the site.
+    // Locally the demo page stands in for the library page.
+    if (url.pathname === '/library') file = path.join(root, 'demo.html');
     fs.stat(file, (err, st) => {
       if (err || !st.isFile()) { res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found'); return; }
       res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
@@ -35,7 +38,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   const port = Number(process.env.PORT) || 8080;
   startServer(port).then(() => {
     console.log(`Serving ${ROOT}`);
-    console.log(`  Demo:       http://localhost:${port}/demo.html`);
+    console.log(`  Demo:       http://localhost:${port}/demo.html?site=1   (keyword mode: add &llai=off)`);
     console.log(`  Model test: http://localhost:${port}/tests/model-test.html`);
   });
 }

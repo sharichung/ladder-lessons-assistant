@@ -38,12 +38,22 @@ for (const q of questions) {
   total++;
   // The old code has no follow-ups: it gets the follow-up message on its own.
   const r1 = normaliseV1(v1.recommendRules(catV1, q.text));
-  const { res: r2, shown } = await runQuestion(v2, q, (text, opts) => v2.recommendRules(cat, text, opts));
+  const { res: r2, shown } = await runQuestion(v2, q, (text, opts) => v2.recommendRules(cat, text, opts), cat);
   const c1 = checkQuestion(q, r1, cat);
   const c2 = checkQuestion(q, r2, cat, shown);
   if (c1.ok) before++;
   if (c2.ok) after++;
   rows.push({ q, r1, r2, c1, c2 });
+}
+
+// sameAs: the same question in the other language must show the same games in the same order.
+const byQ = Object.fromEntries(rows.map((x) => [x.q.id, x]));
+const idsOf = (r) => r.kind === 'picks' ? r.items.flatMap((it) => it.ids || [it.id]).join() : r.kind;
+for (const x of rows) {
+  const y = x.q.sameAs && byQ[x.q.sameAs];
+  if (!y) continue;
+  if (idsOf(x.r1) !== idsOf(y.r1) && x.c1.ok) { x.c1.ok = false; x.c1.fails.push('differs from ' + x.q.sameAs); before--; }
+  if (idsOf(x.r2) !== idsOf(y.r2) && x.c2.ok) { x.c2.ok = false; x.c2.fails.push('differs from ' + x.q.sameAs); after--; }
 }
 
 const esc = (s) => String(s).replace(/\|/g, '\\|');

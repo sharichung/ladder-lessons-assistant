@@ -40,9 +40,42 @@
   window.clarity = function () { var a = Array.prototype.slice.call(arguments); window.__clarity.push(a); __log('clarity', a); };
   // ?site=1 loads the library page's tokens and Google Fonts, to check the look.
   // Left off by default so the automated tests make no outside requests.
-  if (/[?&]site=1\b/.test(location.search)) {
+  // /library (a plan link, served by scripts/serve.mjs) looks like the site too.
+  if (/[?&]site=1\b/.test(location.search) || location.pathname === '/library') {
     document.write('<link rel="stylesheet" href="ll-tokens.css">' +
       '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Noto+Sans+HK:wght@400;700&display=swap">');
+  }
+  // ?host=1: a stub of the site's email form for "Send this plan to my laptop"
+  // (window.LLAssistantHost.sendPlan). The real one would send the email
+  // address and the link to Ladder Lessons; this stub sends nothing.
+  window.__hostSendPlan = [];
+  if (/[?&]host=1\b/.test(location.search)) {
+    window.LLAssistantHost = {
+      sendPlan: function (o) {
+        // For the tests: what the widget handed over, and that the mount was empty.
+        window.__hostSendPlan.push({ url: o.url, lang: o.lang, keys: Object.keys(o).sort(), mountEmpty: o.mount.childNodes.length === 0 });
+        __log('host sendPlan', [o.url]);
+        var zh = o.lang === 'zh';
+        var label = document.createElement('label');
+        label.textContent = zh ? '你嘅 email' : 'Your email';
+        label.style.cssText = 'display:block;font-size:13px;font-weight:700;margin:0 0 4px';
+        var input = document.createElement('input');
+        var n = window.__hostSendPlan.length;
+        input.type = 'email'; input.autocomplete = 'email'; input.id = 'host-email-' + n; input.className = 'host-email';
+        input.style.cssText = 'width:100%;box-sizing:border-box;font:16px system-ui,sans-serif;padding:8px 10px;border:2px solid #2C3E50;border-radius:10px';
+        label.htmlFor = input.id;
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.textContent = zh ? '寄出（示範）' : 'Send (stub)';
+        btn.style.cssText = 'margin-top:8px;font:700 14px system-ui,sans-serif;padding:8px 16px;border:2px solid #2C3E50;border-radius:999px;background:#fff;cursor:pointer';
+        btn.onclick = function () {
+          if (!/.+@.+\..+/.test(input.value)) { input.focus(); return; }
+          btn.disabled = true;
+          // Stub: nothing is sent. The real form posts the address and o.url, then calls done().
+          setTimeout(function () { o.done(); }, 300);
+        };
+        o.mount.appendChild(label); o.mount.appendChild(input); o.mount.appendChild(btn);
+      },
+    };
   }
 </script>
 </head>
@@ -52,9 +85,11 @@
   <section class="tools" aria-label="Test controls">
     <h2>Test controls (demo only, not part of the widget)</h2>
     <button type="button" id="check">Check this device</button>
-    <a href="?llai=off">Reload in keyword-only mode</a>
+    <a href="?site=1&amp;llai=off">Reload in keyword-only mode</a>
     <a href="?site=1">Reload with the site's fonts and colours</a>
-    <a href="?">Reload normally</a>
+    <a href="?site=1&amp;host=1">Reload with the site's email form (stub) for "Send this plan"</a>
+    <a href="demo.html">Reload without the site's fonts</a>
+    <a href="tests/model-test.html">Model test page</a>
     <button type="button" id="reset">Delete the downloaded AI from this browser</button>
     <button type="button" id="gate">Show the email gate</button>
     <pre id="device">Device check: not run yet.</pre>

@@ -1,6 +1,6 @@
 # Ladder Lessons game finder
 
-A small widget for ladderlessons.com. A teacher types who they are teaching (age or level, skill, lesson length) and gets 1 to 3 games from the catalogue, each with a button that opens the game, a plan label (Free / Parent / Teacher) and a Teacher-led or Student-solo tag.
+A small widget for ladderlessons.com. A teacher types who they are teaching (age or level, skill, lesson length) and gets a lesson plan of 1 to 3 games from the catalogue: warm-up, main activity and wrap-up (or one game split into its own parts), with suggested minutes when a length is given. Each game has a card that opens it, a plan label (Free / Parent / Teacher) and a Teacher-led or Student-solo tag. The plan can be sent to the teacher's laptop.
 
 It runs entirely in the visitor's browser. No API key, no backend, no cost per use.
 
@@ -20,10 +20,11 @@ cd ladder-lessons-assistant
 python3 -m http.server 8080
 ```
 
-Then open **http://localhost:8080/** in Chrome. It links to:
-- the demo page
-- the demo with the site's fonts and colours
-- the model test
+Then open **http://localhost:8080/** in Chrome. It goes straight to **the page to test: `demo.html?site=1`**, the widget with the site's fonts (Fredoka, Nunito, Noto Sans HK) and colours. Without `?site=1` the demo page loads no fonts, so card titles show in a system font; that is why screenshots from `http://localhost:8080/` used to look different.
+- Keyword mode: `http://localhost:8080/demo.html?site=1&llai=off`
+- The site's email form for "Send this plan" (a stub): `http://localhost:8080/demo.html?site=1&host=1`
+- The model test: linked from the demo's test controls (`tests/model-test.html`)
+- A plan link goes to `/library#llplan=…`. `npm run serve` serves the demo page at `/library`, so those links work locally. With `python3 -m http.server` they don't: replace `/library` with `/demo.html` in the address.
 
 Press `Ctrl + C` in Terminal to stop the server.
 
@@ -47,9 +48,9 @@ Deploy **one folder: `dist/ll-assistant/`**. Copy it as-is into the main site, f
 
 | File | Size (gzip) | When it loads |
 |---|---|---|
-| `ll-assistant.js` | 97 KB (32 KB) | Page load, `defer` |
-| `ll-assistant.css` | 15 KB (4 KB) | Page load, added by the script |
-| `catalogue.compact.json` | 41 KB (16 KB) | When the teacher opens the widget |
+| `ll-assistant.js` | 147 KB (47 KB) | Page load, `defer`. Up from 97 KB (32 KB): the lesson plan, sending, and the English-Chinese word list |
+| `ll-assistant.css` | 18 KB (5 KB) | Page load, added by the script |
+| `catalogue.compact.json` | 43 KB (17 KB) | When the teacher opens the widget |
 | `ll-worker.js` | 3 KB | Only after the download click, or when the model is already cached |
 | `vendor/web-llm.js` | 6.3 MB (2.2 MB) | Only after the download click, or when the model is already cached |
 | `vendor/web-llm.LICENSE.txt` | | Apache 2.0 licence for WebLLM. Keep it with the library |
@@ -87,7 +88,7 @@ Optional attributes on the script tag:
 | File | What it holds | Who edits it |
 |---|---|---|
 | `catalogue.json` | The only source of games: ids, titles, paths, plans, `in_public_build`, descriptions, keywords | Exported from `games/library.html` |
-| `ages.csv` | Per game: `age_min`, `age_max`, `level_min`, `level_max`, `kid_theme` | You |
+| `ages.csv` | Per game: `age_min`, `age_max`, `level_min`, `level_max`, `kid_theme`, `parts` (the game's own sections, in screen order, separated by " \| "). `parts_basis`, `prefill_basis`, `your_notes` and `description_en` are notes for you and are not used | You |
 | `data/teacher-fields.csv` | Optional per-game "how to run it" line (`how_to_run_en`, `how_to_run_zh`) | You |
 | `ll-tokens.css` | Colours, radii, shadows and fonts copied from `library.html` | Copied from the site |
 
@@ -99,6 +100,7 @@ Optional attributes on the script tag:
   - an age that is not a whole number
   - a level outside pre-A1 to C2
   - `kid_theme` other than `Y` or blank
+  - a part name that is empty or appears twice in one game
   - a `path` that does not start with `/`, or a paid game marked `in_public_build`
 - Unit tests check that the compact file matches `catalogue.json` and `ages.csv` exactly.
 - The compact file has each game's `path` and a flag for the 4 public (free) games. It has **no absolute address**: `url` and `app_url` are not copied, so the widget cannot link a paid game to ladderlessons.com.
@@ -109,10 +111,12 @@ Optional attributes on the script tag:
   - Codes: A1 to C2.
   - Words: beginner = pre-A1/A1, elementary = A1/A2, pre-intermediate = A2, intermediate = B1, upper-intermediate = B2, advanced = B2/C1.
   - A game with no level data always passes.
-- **kid_theme = Y is a ranking signal, never a filter.** For teen and adult queries those games go below all others, never first, and get a **Kid-themed** tag.
+- **kid_theme = Y is a ranking signal, never a filter.** For teen, adult, exam and business queries those games go below all others, never first (also in the lesson plan: never Main, never the warm-up), and get a **Kid-themed** tag.
 - **"How to run it" appears only for games that have their own line** in `teacher-fields.csv`. Every card says Teacher-led or Student solo on its plain meta line.
 
-Ladder Talk's `age_min` is 10 (changed from 16 because teen topics were added).
+Ladder Talk's `age_min` is 10 (changed from 16 because teen topics were added). Grammar Detective's `age_min` is 10 (from 8), so 「小三 文法」 and "Year 3 grammar" no longer get it.
+
+**Parts** (37 of 67 games) are used only by the lesson plan. A blank `parts` cell means not known: that game is never split into steps. Tense Studio's part order is your guess (noted in the CSV); the widget shows it as written.
 
 ---
 
@@ -155,7 +159,8 @@ Other ways of writing ages and school years that are recognised:
 - an exact age of 13 or more
 - "teenage" counts as a teen signal
 - business, 商業, 商務, and "work", except in homework, group work, pair work, worksheet, "work on" and "work in groups"
-- office, 上班, 返工, 職場 and 工作 (not 工作紙, worksheet)
+- office, boss, colleague, 上班, 上班族, 返工, 職場, 工作 (not 工作紙, worksheet), 開會, 會議, 同事, 老闆 and 上司: work words without 商務. "My boss's son is 7" and 我老闆個女 are about a child, not about work.
+- exam words (exam, test prep, KET, FCE, 考試, 測驗), "middle school", "junior high", "high schoolers", "uni", and a school word whose age starts at 12 or more
 
 Exception: when the teacher states an age under 13, "business" and "work" do not count. So "9 year old business game" still gets Mini Business Tycoon Junior.
 
@@ -171,18 +176,24 @@ Exception: when the teacher states an age under 13, "business" and "work" do not
 - When two games score the same and the question is about teens, adults or work, the game written for older learners goes first ("工作英文" gives Ladder Talk before Community Helpers).
 
 **What counts as a match:**
-- 口說 (the site's tag) and 口語 (what many teachers type) are the same word. The catalogue uses both, so either one matches games tagged with the other, and the answer does not depend on which is typed.
+- **One meaning, two languages.** `CONCEPTS` in `src/ll-assistant.js` is a short list of word groups that mean the same thing in English and Chinese: skills (speaking = 口說 = 口語 = 口試, tenses = 時態, proofreading = 改錯 = 校對, vocabulary = 生字 = 詞彙…), learners (kids = 小朋友 = 細路 = 細路仔 = 小孩, student = 學生, adult = 成人…), school stages (Form 2 = F2 = S2 = 中二, P3 = 小三, secondary = 中學), work (work = office = 上班族 = 返工 = 職場; boss = 老闆 and colleague = 同事 and meeting = 開會 = 會議, each also meaning work; job = 職業 = 求職 = 工作面試), festivals, and a few classroom and everyday words (warm-up = 熱身, group = 小組, doctor = 睇醫生…). A teacher's word and a game keyword in the same group are one match, counted once, whichever language either is in; a Chinese keyword that contains a group word (切音節, 小組面試, 商業英文) belongs to that group. Every group gives the same skill in both languages (a unit test checks this). So a question and its translation get the same games in the same order: "Form 4 student speaking" and 「中四學生 口說」 both rank Quick Fire Flashcards, Festival Speaking Builder, Ladder Talk (the plan shows Festival Speaking Builder, the highest score, as the lesson split into its parts, with Quick Fire Flashcards and Ladder Talk under "Other games that fit"). A test runs 20 such pairs. Words not in the list still match as typed.
+- A Chinese group word inside a longer word with another meaning does not count: 新年度 (new school year) is not 新年, 超過年半 is not 過年, and 最高級 (superlative) is not the level 高級.
+- **Everyday uses of skill words** ("let's talk", "a few words", "quick question") do not count when the message also asks for a skill properly ("needs grammar").
+- **Letters are phonics:** alphabet, 字母 and 認字母 point to phonics. ABC does only next to a "cannot yet" or learning word (唔識, 不會, 還沒, 還未, 未識, 認得, can't, don't know, learn, recognise), so 「6歲小朋友，ABC還沒認得」 and 「細路 唔識ABC」 give Ladder Phonics first, while "I work at ABC Bank" and 「ABC公司 開會」 stay off-topic and "ABC Primary School, P3 vocab" gets vocabulary games.
+- **Festivals:** 聖誕, 聖誕節, 萬聖節, 復活節, 中秋, 新年, 過年, 農曆新年, 篝火之夜 and 節日 (and English "New Year", which is not read as "something new") each also mean "festival", so they find Ladder Festivals. A test checks that every festival named in a festival game's English keywords and description (Christmas, Easter, mid-autumn, mooncake, bonfire night) has a Chinese word that finds it; 新年, 農曆新年 and the other Chinese words are checked separately. Note: the catalogue does not list Halloween for Ladder Festivals; 「萬聖節 小朋友」 gets it because 萬聖節 is a festival word, not because the game covers Halloween.
 - School years in a game's keywords (P4, 小四, 中一, 中學) count only a little and never as the topic: the age filter already uses them. So "中一 商業英文" gets Ladder Talk, not Ladder Vocabulary.
 - "group work", "work on", "worksheet" and 工作紙 are not the topic "work".
 - **One keyword match is enough** when the message mentions English or teaching (English, ESL, teach, tutor, 英文, 英語, 教, 補習, 練) or a learner (an age, a level, "adult", 學生…) and nothing else but filler: "English for work" and 職場英文 give Ladder Talk and Ladder Frames; "我學生 6 歲，想練自我介紹" gives Intro Builder. "class", "lesson" or "practice" alone are not enough, so "Where is my cooking class?" stays off-topic. Anything else needs a stronger match.
 - **No sign of a lesson, no games.** A message with no skill, age, level, lesson length, learner word or teaching word gets the off-topic reply, whatever keywords it hits. So "Book a meeting room in the office for Monday" stays off-topic although Ladder Talk has the keywords meeting and office. Of 132 off-topic test messages, 3 now get games, all with an adult word ("My adult son works in an office now"); 9 that used to get games no longer do.
+
+**Several skills in one message** ("Form 2學生想練tenses、生字跟文章改錯", "Age 9, speaking and listening", 「8歲 文法 生字」): each part between commas, 、, "and", 跟 or 同 that names a skill is one request; inside a part, words of different skills separated by spaces are one request each. The widget picks the best game for each request first (scored on that part of the message only; a free game of that skill goes first when it matches as well, as below), then fills any place left. That first message gives Tense Studio, Ladder Vocabulary and Grammar Detective. A part that only names a skill (練口語) next to a more specific request of the same skill (升中面試) counts once.
 
 **Free game first.** A free game goes first when all of these hold:
 - it passed the filters
 - it matches the query's topic, not just a word like "adult" or "kids"
 - it scores at least 60% of the best game
 
-This applies in both modes. In AI mode, if the model leaves it out, the widget puts it in.
+This applies in both modes. In AI mode, if the model leaves it out, the widget puts it in. In the lesson plan it becomes the warm-up, or, when the Main game is split into its parts, the first of "Other games that fit".
 
 **Ladder Vocabulary** takes one card, with a button for each level that fits the age and any stated level. For example, a P5 student gets A1 · A2 · B1, and "A2" gives only A2.
 
@@ -207,10 +218,62 @@ Today: "adult business english" and "商務英文 上班族" give **Ladder Talk*
 - When nothing is left, the widget says "No more games fit that. Try another skill:" with numbered choices of the skills that still have games for this learner. Picking one shows that skill's games, still without repeats. If no skill is left either: "No more games fit that yet."
 - After a question from the widget ("Which skill?") a follow-up asks it again; after "no game for this age" it says nothing is left. It never goes back to an older question.
 - A follow-up is never answered with "could not match"; as a first message it gets "Which skill?".
-- Not follow-ups: "No more, thanks", "Thanks again", "hello again", "next week" (the off-topic reply, as before).
+- Not follow-ups: "hello again" and "next week" (the off-topic reply, as before).
+
+**Small talk:** "thanks", "ok", "Great, thanks!", "No more, thanks", "Thanks for your help", 多謝, 唔該, 唔該晒，我遲啲再試, 好的, 收到 get a short polite reply ("You're welcome. Ask me again any time." / 「唔使客氣，有需要再問我。」; for ok: "Sure. Ask me again any time." / 「好，有需要再問我。」). They never repeat the widget's last question and never count as its answer: after "Which skill?", "thanks" leaves the question open. A message with a number or a request in it ("8 thanks", "thanks, age 8 phonics") is not small talk.
 
 **Short answers join the previous question.** A digit, a chip, or a reply that only gives an age ("she's 9", "9", "nine", "九", "佢今年九") or only gives a skill is added to the earlier question. A new full question starts fresh.
 - Games shown without an age come with the age buttons. Typing an age instead ("7", "she's 7", "7歲") also joins the earlier question. A reply with its own topic ("我學生 6 歲，想練自我介紹") is a new question.
+
+### The lesson plan
+
+Every answer with games is shown as a lesson plan, heading **Your lesson plan** / 「你嘅課堂安排」. Nothing the teacher typed is in it except the lesson length. All of it is built in code from the catalogue; in AI mode the model only picks the games.
+
+1. **Main activity** = the game with the highest score after every filter. For a teen, adult, exam or business question it is never kid-themed.
+2. **Main has 2 or more parts** (from `ages.csv`) → **single-game plan**: that game is the lesson, as one card, and its parts are the steps, in order.
+   - At most 4 steps. A game with more parts gets parts 1 to 3, then one step 4 with the rest joined by " + ", in order ("Practice + Real Life"). No part name is dropped.
+   - Part names stay in English in Chinese answers, as on the game's screens.
+   - With a length: split evenly in 5-minute blocks, at least 5 minutes a step, adding up to the length (45 minutes over 4 parts: 15, 10, 10, 10). A length too short for every part gives fewer steps, the last parts joined the same way.
+   - **Other games that fit** / 「其他啱用嘅遊戲」: up to 2 more cards, free first.
+   - Summary: "This game is free." or "This game is in the Teacher plan."
+3. **Otherwise, a multi-game plan:**
+   - 3 games: Warm-up / Main activity / Wrap-up (暖身 / 主要活動 / 總結); 2 games: Warm-up, Main activity; 1 game: no label.
+   - Warm-up = a free game if there is one besides Main, otherwise the next highest score. Wrap-up = the game left.
+   - Minutes only when a length was given, labelled **Suggested timing** / 「建議時間」: 20/60/20 or 30/70, warm-up and wrap-up rounded to 5 (halves down), Main takes the rest, so the steps add up to the length (30 min: 5/20/5; 45: 10/25/10; 25 min, 2 games: 5/20). When the length cannot give every game 5 minutes, the wrap-up (then the warm-up) moves to "Other games that fit".
+   - Summary, counted from the catalogue: "You can run step 1 today, free." / 「第 1 步今日就玩得，免費。」 and "2 of 3 steps are in the Teacher plan." / 「3 步入面有 2 步喺老師版。」 (the higher plan is named when both appear; "All 3 steps are in the Parent plan." when none is free). Every step free: the first line only.
+4. Each step is a full card: the whole card opens the game, with the plan label and the paid hand-off as before.
+5. Under the plan: "Every game can be stopped at any time, so adjust as you go." / 「每隻遊戲都可以隨時停，時間可以自己調。」
+6. A kid-themed note is a small line right before the first kid-themed card. For a teen, adult, exam or business question a kid-themed game is never the warm-up: when only kid-themed games are left besides Main, Main is the one step and they go under "Other games that fit", after the note.
+7. Follow-ups build a new plan the same way, without games already shown.
+
+### Send this plan to my laptop
+
+Under every plan: a white-pill button **Send this plan to my laptop** / 「將呢堂課傳去我部電腦」. The plan stays on screen; the options open under the button.
+
+**The link:** `location.origin + "/library#llplan=" + code`, for example `/library#llplan=m45e.writing_RolePlayWriting.writing_ChainStory.writing_DetectivesNotebook`. The code holds only: a one-letter marker (`m` multi-game, `s` single-game, `o` one game then "Other games that fit"), the lesson length, `e` or `z` for the language, and the game ids in step order (a single-game plan's link includes its "Other games that fit"; the levels of one Ladder Vocabulary card are joined with `~`). A test fails if any word of a fixed question appears in a link.
+
+**Opening a link** opens the widget with the plan, heading **Your saved lesson plan** / 「你儲存咗嘅課堂安排」, in the plan's language, as its own group in the conversation (any open question is closed). Unknown ids are left out; with none left, the usual empty state. The model never runs for it. The Kid-themed tags and note come back from the catalogue: in a plan that mixes kid-themed games with others, the kid-themed ones are tagged, and the note shows when their skill has nothing for older learners.
+
+**With the site's own email form (host mode):** if the page defines `window.LLAssistantHost.sendPlan`, the widget calls it the first time the panel opens for a plan (once per plan: closing the panel only hides it, so your form, what was typed in it and "Sent" stay):
+
+```js
+window.LLAssistantHost = {
+  // url:   the plan link
+  // mount: an empty element under the button; put your email form in it
+  // lang:  'en' or 'zh'
+  // done:  call it when the email is sent (or return a Promise that resolves then)
+  sendPlan: function ({ url, mount, lang, done }) { /* … */ },
+};
+```
+
+Your form shows first, then a small "or copy the link" / 「或者複製連結」 line, then: "This sends your email address and this list of games to Ladder Lessons. Nothing you typed is included." After `done()` (or the Promise): "Sent. Check your inbox on your laptop." / 「已寄出，喺電腦開 email 就見到。」 If `sendPlan` throws, the panel shows the mail-app, copy and share buttons instead. `demo.html?host=1` has a stub that sends nothing.
+
+**What your form gets and does not get:** the mount sits inside the widget, which is masked in Clarity. Clicks, focus and `submit` reach your form as usual. **Typing events do not**: `input`, `change`, key events, composition and clipboard events stop at the widget, as everywhere else in it, so no session recorder gets a fingerprint of the email address (a browser test runs the real Clarity library to check this). So read the address when the button is clicked or the form is submitted, not from `input` or `keydown` listeners. Escape in your form closes the widget.
+
+**Without it:** three buttons, and "This uses your own mail app. Nothing is sent to Ladder Lessons."
+- **Email it to myself** / 「寄畀自己」: opens the mail app with no recipient, the subject "My Ladder Lessons lesson plan" / 「我嘅 Ladder Lessons 課堂安排」, and a body with the link and one line per step with the game title. It is a button that sets the address, so no `mailto:` address sits in the page for session recorders.
+- **Copy link** / 「複製連結」: says "Copied" for 2 seconds.
+- **Share** / 「分享」: phones only, through the phone's share sheet.
 
 ### AI mode
 
@@ -218,13 +281,13 @@ Today: "adult business english" and "商務英文 上班族" give **Ladder Talk*
 2. The best 12 games that pass the filters go to the model as candidates. Each candidate carries `age_min`, its level range and `kid_theme`, but no URL or price.
 3. WebLLM's grammar engine forces a JSON reply: `{"picks": [...]}` using candidate ids only, as many as the lesson length allows. It can reply `{"ask": "..."}` only when the teacher gave neither age nor level.
 4. The widget then validates the picks and applies the same post-processing as keyword mode, in this order:
-   - **the keyword answer's lead stays first**: its first card (whatever it matched by), and its best keyword match when a free game went in front of it. The model fills the other places but cannot drop or demote them. (This fixed the three AI failures in the owner's run: Number Ninja, Clinic Day and IELTS Speaking Room, and Ladder Talk for "adult business english".)
+   - **the keyword answer's lead stays first**: its first card (whatever it matched by), and its best keyword match when a free game went in front of it. When the message names several skills, the lead is one game for each. The model fills the other places but cannot drop or demote them. (This fixed the three AI failures in the owner's run: Number Ninja, Clinic Day and IELTS Speaking Room, and Ladder Talk for "adult business english".)
    - hard filters
    - top up: never fewer cards than the keyword answer ("Year 5 口說" gives three even when the model returns one)
    - kid-themed games down
    - free game first
    - trim to the maximum
-   Follow-ups send the model only games not shown yet.
+   Follow-ups send the model only games not shown yet. The lesson plan (steps, minutes, summary) is then built in code from the result, as in keyword mode.
 5. A model question is never shown as written: the widget shows its own "How old are they?" with age buttons.
 6. Bad output falls back to keyword matching. So does a crash, a timeout (45 s) or a failed download, for the rest of the visit, and the teacher's text is kept.
 
@@ -249,11 +312,12 @@ One language per conversation. It changes only when a message has Chinese charac
 No border is ever coral or red, in any state. Tests check every element's computed colours at rest, on hover, on keyboard focus and while pressed.
 
 **Parts:**
-- **Header:** the title on one line, the lock sentence (13px, normal weight, balanced lines), a 1px line under it. "AI suggestions can be wrong." appears as small text under each reply that came from the model.
+- **Header:** the title on one line with the close button on that row only; the lock sentence under them across the full width (13px, normal weight, normal line breaks: at 320 and 375px it no longer breaks after "What"); a 1px line under it. "AI suggestions can be wrong." appears as small text under the cards of each reply that came from the model, 16px below the bottom of the card shadow (the card list keeps 4px for that shadow, and the note has `margin-top: 16px`).
+- **Lesson plan:** the heading in Fredoka 600 (700 in Chinese), the summary, then the step cards with a small step label ("Warm-up · 10 min") at the top of each, or one card with its parts listed under the description. The send button is a white pill; its panel is a white box. No new colours. Class names are short codes (`ll-pl-…`, `ll-sh-…`), so a session recording sees no words a teacher might type.
 - **Result cards** copy the library game card: white, 3px ink border, `--r-md`, `--sh-rung`; they lift on hover and keyboard focus. The title is ink (Fredoka 600) with ↗, underlined on hover. Under it: the plan label and one plain `--ink-soft` line, for example "Speaking · Teacher-led · Level A2 · Kid-themed". Paid cards add "Opens the plan details" / 「會開啟方案詳情」. Descriptions show three lines, then a "more" toggle, never an ellipsis.
 - **The whole card opens the game.** The title stays the single button; its click area is stretched over the card, so there is one tab stop per card (plus "more"), the screen reader name is the game title, and the focus ring is drawn on the card. "more" sits above the click area and never opens the game.
 - **Buttons and chips:** white pills with an ink outline. Chips copy the library `.chip` (2.5px ink, Fredoka 600; lift and `--sh-rung` on hover). The launcher, Download and Cancel buttons are the same white pill with `--sh-rung`.
-- **AI offer:** once the first message is sent without a choice, it shrinks to one line ("Use on-device AI (… MB)"), so the answers keep the room; that line opens it again.
+- **AI offer:** one line from the first open, on every screen size: "Use on-device AI (277 MB)". Tapping it opens the full offer card; "Not now" or sending a message closes it again. At 375px all three example chips are fully visible above the composer.
 - **Composer:** one white box with a 2.5px ink border; the text box (no border of its own) and the Find games button sit inside it, the button centred on one line and bottom-aligned when the text grows. The text box starts at one line and grows to four. Placeholder "Age, level, skill" / 「年齡、程度、技能」 (fits at 320px). Its own label, "Describe your student", is visually hidden. The focus ring is on the box.
 - **Conversation:** each teacher message and its reply form one group: 8px inside, 24px and a 1px line between groups; cards 8px apart. The intro and example chips are the empty state only. Thin scrollbar.
 - **Progress bar:** 12px, ink on the line colour (teal is outside the colour budget).
@@ -263,7 +327,7 @@ No border is ever coral or red, in any state. Tests check every element's comput
   - the widget downloads no fonts itself
   - Chinese headings are weight 700 with 0.02em letter spacing
   - the text box and the teacher's own bubble use system fonts only: Google Fonts serves Chinese in character ranges, so a web font there would fetch files based on the characters typed
-- **The demo page** loads no fonts and no tokens by default, which keeps the automated tests free of outside requests. Use `demo.html?site=1` to see it with `ll-tokens.css` and the site's Google Fonts.
+- **The demo page** loads no fonts and no tokens by default, which keeps the automated tests free of outside requests. **Test on `demo.html?site=1`**: it has `ll-tokens.css` and the site's Google Fonts. `http://localhost:8080/` now goes there.
 
 ---
 
@@ -275,11 +339,11 @@ No border is ever coral or red, in any state. Tests check every element's comput
 - There is no server. The widget's code sends nothing the teacher types, and nothing worked out from it, anywhere. The Clarity and Google Fonts notes below describe what other scripts and the browser itself can see.
 - No network request is made per question. The tests check this after every one of the fixed questions.
 - The conversation lives in page memory only and is gone on reload.
-- `localStorage` holds one number: `ll-ai-bytes:<model id>`, the download size.
+- `localStorage` and `sessionStorage` hold nothing. (Earlier versions kept the download size as `ll-ai-bytes:<model id>`; it is no longer read or written.)
 - The Cache API holds the model files.
 - **Network calls happen only after the widget is opened:**
   - the catalogue, from your site
-  - on capable desktops, a size check on huggingface.co
+  - on capable desktops, one small file from huggingface.co (`tensor-cache.json`), to check the model host answers. The size shown is not read from it.
   - after the click, the model download from huggingface.co and raw.githubusercontent.com
 
   None of them contain anything typed. Those hosts see the visitor's IP address, like any CDN.
@@ -293,10 +357,19 @@ No border is ever coral or red, in any state. Tests check every element's comput
 | `ll_download_finished` | The model has loaded after a download | same pattern | same pattern |
 | `ll_fallback_shown` | Keyword mode is used because the device can't run the AI or the AI failed, once per page | same pattern | same pattern |
 | `ll_game_click` | A result card or level button is clicked, once per click, before the hand-off below | same pattern | same pattern |
+| `ll_plan_shown` | A lesson plan is shown for an answer | same pattern | same pattern |
+| `ll_plan_send_open` | "Send this plan to my laptop" is clicked | same pattern | same pattern |
+| `ll_plan_send_email` | "Email it to myself" is clicked, or the site's form reports the email as sent | same pattern | same pattern |
+| `ll_plan_send_copy` | "Copy link" or "or copy the link" is clicked | same pattern | same pattern |
+| `ll_plan_send_share` | "Share" is clicked (phones) | same pattern | same pattern |
+| `ll_plan_opened_from_link` | The widget opens from a plan link | same pattern | same pattern |
 
 - The only parameter is `event_category: "ll_assistant"`. No query text, no game id, no plan, no language.
 - GA4's own script adds its standard fields to every event (page URL, referrer, page title, browser language, screen size, its client and session ids). That is normal page analytics, not data from the conversation.
-- The widget has no `<form>`, so GA4's automatic form events never fire from it.
+- The widget has no `<form>`, so GA4's automatic form events never fire from it. (The site's own email form in host mode is yours.)
+
+**What a plan link shows:** the link contains game ids, the lesson length (a number, the only part that comes from what the teacher typed) and the language, nothing else typed. But it is an address: when the teacher opens it, your site's analytics (GA4, Clarity) can record the full address, including the part after `#`, so the site can see which games were in a plan that was opened. The same ids reach Ladder Lessons in host mode (with the email address the teacher enters in your form), and the teacher's mail app, clipboard or share sheet otherwise.
+
 **Opening a game: the widget hands the click to the page.** It never sends anyone to a paid game itself.
 1. On the library page, it clicks the library's own card for that game (`a.card[data-title="<exact title>"]`) and does nothing else. The library decides: free games open, locked games show the site's lock pop-up with the buy button, members who own the game go straight in.
 2. On any other page: a free game opens at `location.origin + path`; a paid game goes to `location.origin + "/library"`.
@@ -343,7 +416,7 @@ No border is ever coral or red, in any state. Tests check every element's comput
 |---|---|
 | Model | `Qwen2.5-0.5B-Instruct-q4f16_1-MLC` (Qwen2.5 0.5B Instruct, 4-bit) |
 | Licence | Apache 2.0 (Qwen2.5-0.5B-Instruct) |
-| Download | **277 MB measured** in the browser cache on the owner's Mac. The button said 270 MB: its estimate (weights + tokenizer + runtime, read from the model host) is about 7 MB short. Not fixed yet. |
+| Download | **277 MB** (289,982,565 bytes), **measured** in the browser cache on the owner's Mac. This one number is `MODEL_BYTES` in `scripts/build.mjs`, written to `catalogue.compact.json` as `model.bytes`; the button, the one-line offer and the progress all show it. The old estimate read from the model host (it showed 270) is gone. Measure again and change `MODEL_BYTES` whenever the model changes; a unit test fails if the button text and the constant differ. |
 | GPU memory | ~945 MB, from WebLLM's own figure (`vram_required_MB` in WebLLM 0.2.85) |
 | WebLLM | 0.2.85, pinned in `package.json` and copied into `vendor/` |
 
@@ -374,7 +447,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 **Chromium:** `npm test` uses `$CHROME_PATH` if set, otherwise installed Google Chrome.
 
 **The question set:**
-- `tests/questions.json` has 160 fixed questions in English and Chinese. They cover every failing case from the test round plus every review round's edge cases:
+- `tests/questions.json` has 207 fixed questions in English and Chinese, plus 20 English-Chinese pairs that must give the same games in the same order. They cover every failing case from the test round plus every review round's edge cases:
   - kids, adults, IELTS, DSE and Form 4
   - phonics, reading and vocabulary levels
   - lesson lengths, in digits and in words
@@ -383,6 +456,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
   - business and work English (Ladder Talk expected), self-introduction, group work and 工作紙 for kids, 返工
   - follow-ups in both languages (`after` = the message before; `newOnly` = no game repeated), including "nothing left"
   - "Year 5 口說" / "Year 5 speaking" with three games
+  - this round: ABC and child words, 上班族 開會英文, festivals in Chinese, several skills in one message, "Form 4 student speaking" = 「中四學生 口說」 (`sameAs`), small talk after a question, 「小三 文法」 / "Year 3 grammar" without Grammar Detective
   - off-topic messages, with and without an age
   - prompt injection in English and Chinese
   - an empty message
@@ -398,6 +472,11 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
   - teen/adult signals and the under-13 exception
 - **All fixed questions** in keyword mode.
 - **The real model's replies:** `tests/fixtures/model-replies-2026-10-06.json` holds the 94 replies Qwen2.5-0.5B gave on the owner's Mac. Replaying them through the old code gives exactly the owner's 119/122; through the current code, 122/122.
+- **Lesson plan:** step order and minutes for 3 games/30 min, 2 games/25 min, 3 games/no length and 1 game; minutes add up to the length for every length from 1 to 180 and every game's parts; 1B joins with no part name dropped; single-game plan for a game with parts, multi-game for one without; kid-themed never Main for "adult business english" or "Form 4 speaking"; summary lines in English and Chinese; the plan built from AI picks.
+- **Plan link:** round trip for every fixed question; only ids, length, language and marker; no typed word; unknown ids skipped; the mailto body.
+- **Matching this round:** the 20 English-Chinese pairs, `sameAs` pairs, every word group giving the same skill in both languages, festival words, several skills, small talk.
+- **What the teacher sees:** for every fixed question with `firstNotKid` or `freeFirst`, the checker also judges the lesson plan's order (`tests/check.js`): the first card shown is never kid-themed, and a free game is the warm-up, Main or the first other game.
+- **Download size:** the constant is 289,982,565 bytes = 277 MB, and the button text and README match it.
 - **AI post-processing** with scripted models:
   - free game first
   - 2–3 games for 50 minutes
@@ -447,6 +526,24 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 12. **Follow-ups** in English and Chinese, the "nothing left" reply, a skill picked after it, a follow-up after the widget's own question, and "no skill left".
 14. **Fourth review round:** the yellow ring while the pointer is over a button or chip, card titles Fredoka 600 in Chinese, the Ladder Vocabulary card lifts, the AI offer shrinks after the first message so the first card stays in view, descriptions measured again after a rotation, and a lock pop-up that fades out does not leave the widget hidden.
 13. **Screenshots** at 320, 375 and 1280px (empty, a reply with three cards, a follow-up, the text box focused).
+15. **This round:**
+   - first open: the AI offer is one line at 320, 375 and 1280px, and all three example chips sit above the composer at 375 and 1280px; the button and the line show 277 MB
+   - the header lock line fills the width; the close button sits on the title row
+   - the lesson plan in the real UI: heading, summary, step labels and minutes, parts with English names in a Chinese plan, other games, follow-ups, `ll_plan_shown`
+   - send without a host form: mail-app hand-off (the only "request" is the `mailto:` with the link and steps), copy with "Copied" for 2 seconds, Share on a phone, no address in the page
+   - send with a host form: `sendPlan` called once, its form first, "or copy the link" under it, "Sent…" after `done()` or a Promise
+   - a plan link (and a hash change) opens the saved plan without the model; unknown ids skipped; none valid gives the empty state
+   - the AI note is 16px below the bottom of the card shadow
+   - screenshots of plans in English and Chinese, both send panels, the saved plan and the AI note
+16. **Fifth review round:**
+   - small talk in the real UI: the polite reply is on screen, "Which skill?" is not repeated, its chips stay active (also after a switch to Chinese), and "2" still answers it
+   - a plan link on an open conversation is its own group and closes the old question; with the AI ready, the model gets no message for it
+   - the real Clarity library with the site's email form inside the widget: no fingerprint or part of the typed email reaches the upload, and the form still sends
+   - on a 375px screen the send options (both modes) come into view when the button is clicked
+   - the Chinese send-panel wording in both modes, and the Chinese step labels 暖身 / 主要活動 / 總結
+   - the host gets exactly `url`, `mount` (empty), `lang` and `done`; the panel is built once per plan; a failing host form falls back to the mail app
+   - `http://localhost:8080/` goes to `demo.html?site=1`
+   - cancelling a start from the cache keeps 277 MB on the offer
 9. **Device and download:**
    - no `navigator.gpu`
    - phone and in-app user agents
@@ -457,7 +554,9 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 
 ### Before and after (E3)
 
-**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 49/159, after 159/159**. Full table: `tests/results/keyword-before-after.md`.
+**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 56/206, after 206/206**. Full table: `tests/results/keyword-before-after.md`.
+
+**This round's questions on the previous version (commit 24133d3) and now:** all 13 of the owner's examples failed before and pass now. 5 more failed before and pass now: 「返工 要同老闆同事開會 想練英文」, 「新年 小朋友 活動」, the English multi-skill question, and "No more, thanks" / "Thanks again!", whose expected answer changed from the off-topic reply to small talk. 6 added with them already passed: two more child-word phrasings, 中秋, speaking and listening, and both Grammar Detective questions (they pass once the new `ages.csv` is built). The first 10 English-Chinese pairs: 3 gave the same games before, 10 now. The review then added 25 more fixed questions and 10 more pairs from its findings (ABC as a name, 新年度, "New Year", work words, skills separated by spaces, "let's talk", exam and middle-school questions, small-talk sentences).
 
 **AI mode, owner's run (2026-10-06, Mac, Apple GPU, Chrome 154, 122 questions):** before 34/122, after 119/122, 0 invalid replies or crashes in 94 model calls. The three failures (Number Ninja, Clinic Day, IELTS Speaking Room dropped or demoted by the model) are fixed by keeping the keyword answer's lead; the replay of those same 94 replies now passes 122/122. The 24 questions added since need a new run of `model-test.html` to have real model replies.
 
@@ -523,7 +622,8 @@ src/                         widget source (plain JS + CSS, no framework)
 scripts/build.mjs            builds dist/ll-assistant/ and validates the data
 scripts/serve.mjs            local static server
 dist/ll-assistant/           ← deploy this folder
-demo.html, index.html        local test pages
+demo.html                    local test page (demo.html?site=1 has the site's fonts)
+index.html                   sends you to demo.html?site=1
 tests/                       questions, checker, unit, browser, compare, model-test, baseline (old code)
 tests/fixtures/              the real model's recorded replies, replayed by the unit tests
 tests/results/               before/after table and screenshots, written by npm test

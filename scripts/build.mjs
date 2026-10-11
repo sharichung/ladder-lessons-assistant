@@ -3,8 +3,10 @@
 //   node scripts/build.mjs
 //
 // 1. Reads catalogue.json (the only source of games), ages.csv (age_min,
-//    age_max, level_min, level_max, kid_theme) and data/teacher-fields.csv
+//    age_max, level_min, level_max, kid_theme, parts) and data/teacher-fields.csv
 //    (optional how-to-run lines). Nothing is inferred: a blank stays blank.
+//    ages.csv columns the widget does not use (parts_basis, prefill_basis,
+//    your_notes, description_en) are ignored.
 // 2. Writes catalogue.compact.json with only the fields the widget needs.
 // 3. Copies the widget files and the WebLLM library into the same folder.
 //
@@ -24,8 +26,15 @@ const REQUIRED = ['id', 'title', 'path', 'category', 'tier', 'free', 'mode',
 
 // Must match the record in @mlc-ai/web-llm's prebuiltAppConfig. Checked below.
 const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
+// The model's whole download (weights, tokenizer, config, runtime) in bytes, as
+// measured in the browser cache after a real download on the owner's Mac
+// (tests/model-test.html, 2026-10-06): 289,982,565 bytes = 277 MB. The widget
+// shows this one number everywhere (button, one-line offer, progress). Measure
+// again and change it here whenever MODEL_ID changes.
+const MODEL_BYTES = { 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC': 289982565 }[MODEL_ID];
 
 const problems = [];
+if (!MODEL_BYTES) problems.push(`MODEL_BYTES has no measured download size for ${MODEL_ID}: measure it with tests/model-test.html and add it`);
 
 // ---------- catalogue ----------
 const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalogue.json'), 'utf8'));
@@ -110,7 +119,12 @@ else {
       level_min: levelOrBlank(r.level_min, r.id, 'level_min'),
       level_max: levelOrBlank(r.level_max, r.id, 'level_max'),
       kid: r.kid_theme === 'Y',
+      // The game's own sections, in screen order, "Sounds | Match | Spell".
+      // Blank means not known: the lesson plan then never splits the game.
+      parts: r.parts ? r.parts.split('|').map(x => x.trim()) : null,
     };
+    if (a.parts && a.parts.some(x => !x)) problems.push(`ages.csv ${r.id}: parts "${r.parts}" has an empty name`);
+    if (a.parts && new Set(a.parts).size !== a.parts.length) problems.push(`ages.csv ${r.id}: parts "${r.parts}" names a part twice`);
     if (!['', 'Y'].includes(r.kid_theme)) problems.push(`ages.csv ${r.id}: kid_theme "${r.kid_theme}" must be Y or blank`);
     if (a.age_min != null && a.age_max != null && a.age_min > a.age_max) problems.push(`ages.csv ${r.id}: age_min is above age_max`);
     if (a.level_min && a.level_max && LEVELS.indexOf(a.level_min) > LEVELS.indexOf(a.level_max)) problems.push(`ages.csv ${r.id}: level_min is above level_max`);
@@ -158,7 +172,7 @@ if (problems.length) {
 const compact = {
   v: 1,
   built: new Date().toISOString().slice(0, 10),
-  model: { id: MODEL_ID, url: modelUrl, lib: modelLib, vram_mb: vramMB },
+  model: { id: MODEL_ID, url: modelUrl, lib: modelLib, vram_mb: vramMB, bytes: MODEL_BYTES },
   skills: Object.fromEntries(Object.values(categories).map(c => [c.id, { en: c.en, zh: c.zh }])),
   games: source.games.map(g => {
     const e = extra[g.id] || {};
@@ -176,6 +190,7 @@ const compact = {
     if (a.level_min) out.level_min = a.level_min;
     if (a.level_max) out.level_max = a.level_max;
     if (a.kid) out.kid = true;
+    if (a.parts) out.parts = a.parts;
     if (e.how_en) out.how_en = e.how_en;
     if (e.how_zh) out.how_zh = e.how_zh;
     return out;
@@ -195,6 +210,6 @@ const n = compact.games.length;
 const count = k => compact.games.filter(g => g[k]).length;
 const kb = f => (fs.statSync(path.join(OUT, f)).size / 1024).toFixed(1) + ' KB';
 console.log(`Built dist/ll-assistant/ from ${n} games`);
-console.log(`  from ages.csv: age_min ${compact.games.filter(g => g.age_min != null).length}/${n}, levels ${compact.games.filter(g => g.level_min || g.level_max).length}/${n}, kid_theme ${count('kid')}/${n}; how-to-run: ${count('how_en')}/${n}`);
+console.log(`  from ages.csv: age_min ${compact.games.filter(g => g.age_min != null).length}/${n}, levels ${compact.games.filter(g => g.level_min || g.level_max).length}/${n}, kid_theme ${count('kid')}/${n}, parts ${count('parts')}/${n}; how-to-run: ${count('how_en')}/${n}`);
 console.log(`  ll-assistant.js ${kb('ll-assistant.js')}, ll-assistant.css ${kb('ll-assistant.css')}, catalogue.compact.json ${kb('catalogue.compact.json')}`);
 console.log(`  vendor/web-llm.js ${(fs.statSync(path.join(OUT, 'vendor', 'web-llm.js')).size / 1048576).toFixed(1)} MB (loaded only after the download click)`);

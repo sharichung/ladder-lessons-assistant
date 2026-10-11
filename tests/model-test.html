@@ -99,8 +99,9 @@
   row($('device'), 'Model', cat.model.id + ' · WebLLM estimate of GPU memory: ' + Math.round(cat.model.vram_mb) + ' MB');
 
   var cachedBefore = await X.isModelCached(cat.model);
-  var bytes = null;
-  try { bytes = await X.modelDownloadBytes(cat.model); } catch (e) { $('load-status').textContent = 'Could not reach the model host.'; }
+  // The size the widget shows: one measured number from scripts/build.mjs.
+  var bytes = cat.model.bytes || null;
+  try { await X.modelHostReachable(cat.model); } catch (e) { $('load-status').textContent = 'Could not reach the model host.'; }
   $('load').textContent = cachedBefore ? 'Start model (already downloaded)' : 'Download model · ' + (bytes ? X.toMB(bytes) + ' MB' : '? MB') + ' · one-time download';
   $('load').disabled = !dev.ok && !confirm('The widget would NOT offer the AI on this device (' + dev.reason + '). Try loading anyway?');
 
@@ -114,7 +115,7 @@
     } catch (e) { $('load-status').textContent = 'Load failed: ' + e.message; report.load.error = e.message; return; }
     var ms = Math.round(performance.now() - t0);
     var measured = await cachedBytes();
-    report.load = { fromCache: cachedBefore, ms: ms, downloadBytesMeasured: measured, downloadMBMeasured: X.toMB(measured), downloadMBShownOnButton: bytes ? X.toMB(bytes) : null };
+    report.load = { fromCache: cachedBefore, ms: ms, downloadBytesMeasured: measured, downloadMBMeasured: X.toMB(measured), downloadMBShownOnButton: bytes ? X.toMB(bytes) : null, sizeMatchesButton: bytes ? X.toMB(measured) === X.toMB(bytes) : null };
     $('load-status').textContent = (cachedBefore ? 'Started from cache' : 'Downloaded and started') + ' in ' + (ms / 1000).toFixed(1) + ' s. Size in browser cache: ' + X.toMB(measured) + ' MB.';
     $('run').disabled = false;
   };
@@ -148,7 +149,7 @@
       $('progress').textContent = 'Question ' + (i + 1) + ' of ' + questions.length + '…';
       // Follow-ups ("after" + a follow-up message) run as a conversation; the old code gets the message alone.
       var kwB = normaliseV1(V1.recommendRules(catV1, q.text));
-      var kwRun = await runQ(core, q, function (text, opts) { return core.recommendRules(cat, text, opts); });
+      var kwRun = await runQ(core, q, function (text, opts) { return core.recommendRules(cat, text, opts); }, cat);
       var kwA = kwRun.res;
       // Every model call in the conversation counts (a follow-up's first message too), each timed on its own.
       var aiShown = [], each = [];
@@ -156,7 +157,7 @@
         return runQ(core, q, function (text, opts) {
           var t0 = performance.now();
           return core.recommendAI(cat, client, text, Object.assign({ timeoutMs: 60000 }, opts)).then(function (r) { each.push({ r: r, ms: Math.round(performance.now() - t0) }); return r; });
-        }).then(function (x) { aiShown = x.shown; return x.res; });
+        }, cat).then(function (x) { aiShown = x.shown; return x.res; });
       });
       var aiA = after.r || kwA;
       var before = await aiRun(function () { return V1.recommendAI(catV1, client, q.text, { timeoutMs: 60000 }); });

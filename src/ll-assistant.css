@@ -136,7 +136,8 @@
   padding: 0 16px 10px; border-bottom: 1px solid var(--ll-line);
   font-size: 13px; font-weight: 400; line-height: 1.4; color: var(--ll-ink);
 }
-#ll-assistant .ll-privacy span { text-wrap: balance; }
+/* The sentence fills the width under the title; lines break only where they run out of room. */
+#ll-assistant .ll-privacy span { flex: 1 1 auto; min-width: 0; }
 #ll-assistant .ll-lock { flex: 0 0 auto; margin-top: 2px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 
 /* AI offer */
@@ -178,10 +179,11 @@
 }
 #ll-assistant .ll-thinking { color: var(--ll-ink-soft); font-style: italic; }
 #ll-assistant .ll-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-#ll-assistant .ll-foot { margin: 8px 2px 0; }
+/* The AI note: 16px below the bottom of the card shadow above it (the list keeps 4px for that shadow). */
+#ll-assistant .ll-msg p.ll-foot { margin: 16px 2px 0; }
 
 /* Result cards: the library game card (A1); the whole card opens the game (A9) */
-#ll-assistant .ll-cards { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+#ll-assistant .ll-cards { list-style: none; margin: 8px 0 0; padding: 0 0 4px; display: flex; flex-direction: column; gap: 8px; }
 #ll-assistant .ll-cards > li.ll-small { margin: 4px 2px 0; }
 #ll-assistant .ll-card {
   position: relative; margin: 0; padding: 12px 14px;
@@ -211,18 +213,54 @@
 #ll-assistant .ll-tier[data-t="1"] { background: var(--ll-tier-free); border-color: var(--ll-ink); }
 #ll-assistant .ll-tier[data-t="2"] { background: var(--ll-yellow); }
 #ll-assistant .ll-tier[data-t="3"] { background: var(--ll-purple-1); border-color: var(--ll-purple-1); }
-#ll-assistant .ll-plan { margin: -2px 0 6px; font-size: 12px; }
+#ll-assistant .ll-card p.ll-plan { margin: -2px 0 6px; font-size: 12px; }
 /* Description: three lines, then "more" (C7). No ellipsis. */
 #ll-assistant .ll-desc { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ll-ink-soft); max-height: calc(1.45em * 3); overflow: hidden; }
+#ll-assistant .ll-card p.ll-desc { margin: 0; }
 #ll-assistant .ll-desc.ll-open { max-height: none; }
 #ll-assistant .ll-more {
   position: relative; z-index: 1; display: inline-block; margin: 2px 0 0; padding: 2px 0;
   border: 0; background: none; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--ll-ink);
   text-decoration: underline; text-underline-offset: 3px;
 }
-#ll-assistant .ll-how { font-size: 13.5px; margin: 6px 0 0; }
+#ll-assistant .ll-card p.ll-how { font-size: 13.5px; margin: 6px 0 0; }
 /* Level buttons on the Ladder Vocabulary card sit above nothing: that card has no single game */
 #ll-assistant .ll-card .ll-chips { margin-top: 6px; }
+
+/* Lesson plan (Feature 1): heading, summary, steps as full cards, parts inside
+   a single-game card. Ink, cream and white only; the plan label stays the only coloured pill.
+   Class names are short codes, so a session recording sees no words a teacher might type:
+   ll-pl plan, -h heading, -s summary line, -t "Suggested timing", -st step label, -a "stop any time"
+   line, -o "Other games that fit", -pb/-p/-pl/-pn/-pm parts box, list, label, name, minutes.
+   ll-sh "Send this plan": -b button, -p panel, -r button row, -n privacy note, -d "Sent", -m the host's form. */
+#ll-assistant .ll-pl { display: flex; flex-direction: column; }
+#ll-assistant .ll-pl-h { margin: 0 0 4px; font-family: var(--ll-ff-head); font-size: 17px; font-weight: 600; line-height: 1.3; color: var(--ll-ink); }
+#ll-assistant .ll-panel[data-l="2"] .ll-pl-h,
+#ll-assistant .ll-panel[data-l="2"] .ll-pl-o,
+#ll-assistant .ll-panel[data-l="2"] .ll-card p.ll-pl-st { font-weight: 700; letter-spacing: .02em; }
+#ll-assistant .ll-pl p.ll-pl-s { margin: 0 0 2px; font-size: 13.5px; color: var(--ll-ink); }
+#ll-assistant .ll-pl p.ll-pl-t { margin: 8px 2px 0; font-weight: 700; }
+#ll-assistant .ll-card p.ll-pl-st { margin: 0 0 4px; font-family: var(--ll-ff-head); font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--ll-ink-soft); }
+#ll-assistant .ll-pl p.ll-pl-a { margin: 12px 2px 0; }
+#ll-assistant .ll-pl p.ll-pl-o { margin: 16px 0 0; font-family: var(--ll-ff-head); font-size: 15px; font-weight: 600; }
+#ll-assistant .ll-pl-pb { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ll-line); }
+#ll-assistant .ll-card p.ll-pl-pl { margin: 0 0 4px; font-weight: 700; }
+#ll-assistant .ll-pl-p { list-style: none; counter-reset: ll-part; margin: 0; padding: 0; }
+#ll-assistant .ll-pl-p li { counter-increment: ll-part; display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 13.5px; line-height: 1.35; }
+#ll-assistant .ll-pl-p li::before { content: counter(ll-part) "."; flex: 0 0 auto; min-width: 16px; font-weight: 700; }
+#ll-assistant .ll-pl-pn { flex: 1 1 auto; min-width: 0; }
+#ll-assistant .ll-pl-pm { flex: 0 0 auto; font-size: 12.5px; color: var(--ll-ink-soft); white-space: nowrap; }
+
+/* Send to laptop (Feature 2): a white-pill button; the options open under it (ll-sh, see above) */
+#ll-assistant .ll-sh { margin-top: 16px; }
+#ll-assistant .ll-sh-b { width: 100%; }
+#ll-assistant .ll-sh-p { margin-top: 10px; padding: 12px; border-radius: var(--ll-r-rung); background: #fff; box-shadow: var(--ll-sh-card); }
+#ll-assistant .ll-sh-r { display: flex; flex-wrap: wrap; gap: 8px; }
+#ll-assistant .ll-sh-r .ll-btn { flex: 1 1 auto; padding: 8px 14px; font-size: 14px; }
+#ll-assistant .ll-sh-p p.ll-sh-n { margin: 8px 0 0; }
+#ll-assistant .ll-sh-p p.ll-sh-d { margin: 8px 0 0; font-size: 13.5px; font-weight: 700; color: var(--ll-ink); }
+#ll-assistant .ll-sh-p p.ll-sh-d:empty, #ll-assistant .ll-sh-m:empty { display: none; }
+#ll-assistant .ll-sh-p .ll-link { display: inline-block; margin-top: 6px; }
 
 /* Composer: one white box with the ink outline; text box and button inside (B1-B3) */
 #ll-assistant .ll-composer {

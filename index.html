@@ -3,23 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Local test pages</title>
-<style>
-  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f6f7fb; color: #1d2433; }
-  main { max-width: 640px; margin: 40px auto; padding: 0 16px; }
-  a.card { display: block; background: #fff; border: 1px solid #e3e7ee; border-radius: 12px; padding: 16px; margin: 12px 0; color: inherit; text-decoration: none; }
-  a.card:hover { border-color: #1f5f8b; }
-  a.card strong { color: #1f5f8b; }
-  p.note { color: #5b6475; font-size: 14px; }
-</style>
+<title>Game finder demo</title>
+<!-- The page to test is demo.html?site=1: the widget with the site's fonts and
+     colours. This page only sends you there. The model test is linked from the
+     demo's test controls. -->
+<meta http-equiv="refresh" content="0; url=demo.html?site=1">
+<script>location.replace('demo.html?site=1' + location.hash);</script>
 </head>
 <body>
-<main>
-  <h1>Ladder Lessons game finder · local test pages</h1>
-  <p class="note">This page is only for testing on your computer. It is not deployed. The deploy folder is <code>dist/ll-assistant/</code>.</p>
-  <a class="card" href="demo.html"><strong>Demo page →</strong><br>A mock library page with the widget, plus test controls (device check, keyword-only mode, delete the downloaded AI, email gate).</a>
-  <a class="card" href="demo.html?site=1"><strong>Demo with the site's fonts and colours →</strong><br>Same page, plus ll-tokens.css and the Google Fonts the library page loads, to check the look.</a>
-  <a class="card" href="tests/model-test.html"><strong>Model test →</strong><br>Downloads the real model and runs every fixed question with the old and new code, in AI and keyword mode. Use desktop Chrome in a normal window. Gives you the report to copy back.</a>
-</main>
+<p><a href="demo.html?site=1">Open the demo page</a></p>
 </body>
 </html>
