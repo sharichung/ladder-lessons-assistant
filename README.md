@@ -569,7 +569,7 @@ npm run serve        # http://localhost:8080/  (or: python3 -m http.server 8080)
 
 ### Before and after (E3)
 
-**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 56/222, after 222/222**. Full table: `tests/results/keyword-before-after.md`.
+**Keyword mode:** `npm run compare` runs the old code (commit fb82fd2, kept in `tests/baseline/`) and the new code on the same questions with the same checker. Result: **before 60/231, after 231/231** (the old code also reads the current catalogue, so Festival Speaking Builder's new festival keywords lift it from 56 to 60). Full table: `tests/results/keyword-before-after.md`.
 
 **This round's questions on the previous version (commit 24133d3) and now:** all 13 of the owner's examples failed before and pass now. 5 more failed before and pass now: 「返工 要同老闆同事開會 想練英文」, 「新年 小朋友 活動」, the English multi-skill question, and "No more, thanks" / "Thanks again!", whose expected answer changed from the off-topic reply to small talk. 6 added with them already passed: two more child-word phrasings, 中秋, speaking and listening, and both Grammar Detective questions (they pass once the new `ages.csv` is built). The first 10 English-Chinese pairs: 3 gave the same games before, 10 now. The review then added 25 more fixed questions and 10 more pairs from its findings (ABC as a name, 新年度, "New Year", work words, skills separated by spaces, "let's talk", exam and middle-school questions, small-talk sentences).
 
