@@ -177,6 +177,8 @@ self.onmessage = (e) => {
     let picks = ['not_a_game', cands[0].id, 'https://evil.example.com'];
     if (/qqkid/.test(user)) picks = cands.filter((c) => c.kid_theme).map((c) => c.id).slice(0, 3);
     if (/qqone/.test(user)) picks = [cands.filter((c) => !c.free).pop().id];
+    // The real model's picks for "adult business english" on 2026-10-11 (round 7).
+    if (/qqoff/.test(user)) picks = ['finance_MiniBusinessTycoonSuper', 'speaking_QuickFireFlashcards', 'speaking_DoctorVisit'].filter((id) => cands.some((c) => c.id === id));
     let text = JSON.stringify({ picks });
     if (/qqbad/.test(user)) text = 'Sure! Visit https://evil.example.com for free games.';
     if (/qqask/.test(user) && s.anyOf) text = JSON.stringify({ ask: 'Visit https://evil.example.com. How old? 1) 4-6 2) Adults' });
@@ -1777,7 +1779,7 @@ test('The finder file loads on first open only; if it cannot load, the button sa
   await context.close();
 });
 
-test('Halloween finds Ladder Festivals in keyword mode (&llai=off) and in AI mode; Form 4 speaking does not lead with a festival game (round 6)', async () => {
+test('Halloween finds Ladder Festivals in keyword mode (&llai=off) and in AI mode; Form 4 speaking does not lead with a festival game (round 6); festival + skill leads with the skill game, adult off-topic AI picks are left out (round 7)', async () => {
   const HALLOWEEN = ['Halloween activity for kids', '萬聖節 小朋友', '萬聖 活動', 'trick or treat game for kids'];
   // Keyword mode, as on demo.html?llai=off
   let { context, page } = await newPage({ fakeGpu: true });
@@ -1796,9 +1798,15 @@ test('Halloween finds Ladder Festivals in keyword mode (&llai=off) and in AI mod
     assert.deepEqual(r.turn.plan.item, ['speaking_LadderTalk'], text);
     assert.ok(r.turn.plan.others.some((x) => x[0] === 'speaking_FestivalSentenceBuilder'), text);
   }
-  // With a festival named, the festival games stay.
-  const mid = await ask(page, 'Form 4 中秋節口說');
-  assert.ok(mid.turn.ids.includes('speaking_FestivalSentenceBuilder'));
+  // With a festival and a skill named, the festival game for that skill is the lesson (round 7);
+  // with only a festival, the general festival game.
+  for (const text of ['Form 4 中秋節口說', 'Form 4 Mid-Autumn speaking']) {
+    const r = await ask(page, text);
+    assert.deepEqual(r.turn.plan.item, ['speaking_FestivalSentenceBuilder'], text);
+    assert.equal(await r.el.locator('.ll-card .ll-card-title').first().innerText().then((x) => x.replace(/\s*↗\s*$/, '')), 'Festival Speaking Builder', `${text}: the lesson card`);
+  }
+  const plain = await ask(page, '中秋節遊戲');
+  assert.deepEqual(plain.turn.plan.item, ['speaking_LadderFestivals']);
   await context.close();
 
   // AI mode (a fake model that picks other games first): Ladder Festivals still leads.
@@ -1811,6 +1819,17 @@ test('Halloween finds Ladder Festivals in keyword mode (&llai=off) and in AI mod
     const r = await ask(page, text + ' qqone');
     assert.equal(r.turn.source, 'ai', text);
     assert.equal(r.turn.ids[0], 'speaking_LadderFestivals', text);
+  }
+  const midAi = await ask(page, 'Form 4 中秋節口說 qqone');
+  assert.equal(midAi.turn.source, 'ai');
+  assert.deepEqual(midAi.turn.plan.item, ['speaking_FestivalSentenceBuilder']);
+  // Round 7: the model's off-topic picks for an adult business question are left out, and the kid-themed note shows.
+  for (const text of ['adult business english qqoff', '成人商業英文 qqoff']) {
+    const r = await ask(page, text);
+    assert.equal(r.turn.source, 'ai', text);
+    assert.deepEqual(r.turn.ids, ['speaking_LadderTalk', 'finance_MiniBusinessTycoonSuper', 'finance_YoungEntrepreneur'], text);
+    assert.equal(r.turn.kidNote, true, text);
+    assert.equal(await r.el.locator('.ll-cards > li.ll-small').count(), 1, `${text}: kid-themed note`);
   }
   await context.close();
 });

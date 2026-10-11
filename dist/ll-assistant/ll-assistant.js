@@ -29,7 +29,7 @@
 
   // scripts/build.mjs adds a version to this name in dist/, so a cached copy of
   // one file is never paired with a newer copy of the other.
-  var APP_FILE = 'll-assistant-app.js?v=625fc70adb';
+  var APP_FILE = 'll-assistant-app.js?v=93493a95c5';
   var LAUNCHER = { en: 'Find a game', zh: '幫我揀遊戲' };
   var RETRY = { en: 'Try again', zh: '再試一次' };
 

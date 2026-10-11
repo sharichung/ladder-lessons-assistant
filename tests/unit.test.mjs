@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const { core } = require(path.join(ROOT, 'src', 'll-assistant-app.js'));
-const { checkQuestion, runQuestion } = require(path.join(ROOT, 'tests', 'check.js'));
+const { checkQuestion, runQuestion, mainOf } = require(path.join(ROOT, 'tests', 'check.js'));
 const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalogue.json'), 'utf8'));
 const compactRaw = JSON.parse(fs.readFileSync(path.join(ROOT, 'dist', 'll-assistant', 'catalogue.compact.json'), 'utf8'));
 const cat = core.prepareCatalogue(JSON.parse(JSON.stringify(compactRaw)));
@@ -472,7 +472,7 @@ test('festival games are a step only when the question names a festival; otherwi
   }
   // With a festival named, a festival game may lead.
   const mid = core.buildPlan(core.recommendRules(cat, 'Form 4 中秋節口說'), cat);
-  assert.ok(FEST.has(mid.item ? mid.item.id : mid.steps.find((st) => st.role === 'main' || st.role === null).item.id));
+  assert.ok(FEST.has(mainOf(mid)[0]));
   assert.ok([mid.item].concat(mid.steps.map((st) => st.item), mid.others).filter(Boolean).some((x) => x.id === 'speaking_FestivalSentenceBuilder'));
   // A multi-game plan's link carries its other games after two dots, and they come back there.
   const y5 = core.buildPlan(core.recommendRules(cat, 'Age 9 speaking 30 min'), cat);
@@ -486,7 +486,8 @@ test('festival games are a step only when the question names a festival; otherwi
 test('Halloween: Ladder Festivals first in keyword mode and in AI mode, whatever the model picks (round 6)', async () => {
   const g = cat.byId.speaking_LadderFestivals;
   for (const w of ['Halloween', '萬聖節', '萬聖', 'trick or treat']) assert.ok(g.kw.includes(w), `catalogue keyword ${w}`);
-  const texts = ['Halloween activity for kids', '萬聖節 小朋友', '萬聖 活動', 'trick or treat game for kids', '8歲 萬聖節 口說'];
+  // With a skill named too (8歲 萬聖節 口說), the festival game for that skill leads: see round 7.
+  const texts = ['Halloween activity for kids', '萬聖節 小朋友', '萬聖 活動', 'trick or treat game for kids'];
   for (const text of texts) {
     assert.equal(core.recommendRules(cat, text).ids[0], 'speaking_LadderFestivals', `keyword: ${text}`);
     // Scripted models: one leaves Ladder Festivals out, one puts it last, one picks it alone.
@@ -496,6 +497,48 @@ test('Halloween: Ladder Festivals first in keyword mode and in AI mode, whatever
       assert.equal(r.ids[0], 'speaking_LadderFestivals', `AI (${picks.join(',')}): ${text} -> ${r.ids.join(', ')}`);
     }
   }
+});
+
+test('festival and skill named: Main is the festival game for that skill, in keyword mode and in AI mode; otherwise the usual order (round 7)', async () => {
+  const FSB = 'speaking_FestivalSentenceBuilder', LF = 'speaking_LadderFestivals';
+  const mainIn = (r) => mainOf(core.buildPlan(r, cat))[0];
+  // Form 4 中秋節口說 and its English: only Festival Speaking Builder is Main.
+  for (const text of ['Form 4 中秋節口說', 'Form 4 Mid-Autumn speaking', 'Form 4 中秋節口說 20分鐘', 'Halloween speaking', '8歲 萬聖節 口說', '聖誕節 口說 成人']) {
+    const kw = core.recommendRules(cat, text);
+    assert.equal(mainIn(kw), FSB, `keyword: ${text}`);
+    assert.ok(kw.ids.includes(FSB) && kw.ctx.lead.includes(FSB), `keyword: ${text}`);
+    // Scripted models: Ladder Festivals first, Ladder Festivals alone, the owner's real reply, nothing festive.
+    const picksList = [[LF, FSB], [LF], [LF, FSB, 'speaking_FullSentences'], ['speaking_LadderTalk', 'speaking_HookLab']];
+    for (const picks of picksList) {
+      let sent = [];
+      const r = await core.recommendAI(cat, reply((m, schema) => JSON.stringify({ picks: (sent = picks.filter((id) => enumOf(schema).includes(id))) })), text);
+      // A reply with no candidate in it is not valid; the keyword answer is shown.
+      assert.equal(r.source, sent.length ? 'ai' : 'rules', text);
+      assert.equal(mainIn(r), FSB, `AI (${picks.join(',')}): ${text} -> ${r.ids.join(', ')}`);
+    }
+  }
+  // No skill named: the general festival game leads, as before.
+  for (const text of ['中秋節遊戲', 'Mid-Autumn festival activity', 'Halloween activity for kids']) {
+    const kw = core.recommendRules(cat, text);
+    assert.equal(kw.ids[0], LF, text);
+    assert.equal(mainIn(kw), LF, text);
+    const r = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: [FSB, LF] })), text);
+    assert.equal(mainIn(r), LF, `AI: ${text}`);
+  }
+  // A skill no festival game is about (writing, listening): the usual order decides, as before the rule.
+  for (const text of ['中秋節 寫作', '8歲 中秋節 聆聽']) assert.equal(core.recommendRules(cat, text).ctx.festPick, undefined, text);
+
+  // Nothing is written for these two games: the same rule picks a new festival
+  // game for its skill, and falls back to the general one when the skill game is gone.
+  const withGame = JSON.parse(JSON.stringify(compactRaw));
+  withGame.games.push({ id: 'writing_FestivalWritingTest', title: 'Festival Writing Test', path: '/writing/writing_FestivalWritingTest', skill: 'writing', tier: 'parent', mode: 'led', desc_en: 'Test game.', desc_zh: '測試。', kw: '節日 festival 寫作 writing', age_min: 8, age_max: 150 });
+  const cat2 = core.prepareCatalogue(withGame);
+  assert.equal(mainOf(core.buildPlan(core.recommendRules(cat2, '10歲 中秋節 寫作'), cat2))[0], 'writing_FestivalWritingTest');
+  assert.equal(mainOf(core.buildPlan(core.recommendRules(cat2, 'Form 4 中秋節口說'), cat2))[0], FSB);
+  const without = JSON.parse(JSON.stringify(compactRaw));
+  without.games = without.games.filter((g) => g.id !== FSB);
+  const cat3 = core.prepareCatalogue(without);
+  assert.equal(mainOf(core.buildPlan(core.recommendRules(cat3, 'Form 4 中秋節口說'), cat3))[0], LF);
 });
 
 // ---------- plan link (Feature 2) ----------
@@ -575,24 +618,51 @@ test('analytics: the plan events are fixed names in the allowlist', () => {
 const reply = (fn) => ({ calls: [], chat(messages, schema) { this.calls.push({ messages, schema }); return Promise.resolve({ text: fn(messages, schema), ms: 1 }); } });
 const enumOf = (schema) => (schema.properties || schema.anyOf[0].properties).picks.items.enum;
 
-// The owner's run of tests/model-test.html (2026-10-06) recorded the real model's
-// reply to every question that reached it. Replaying them shows what the current
+// The owner's runs of tests/model-test.html recorded the real model's reply to
+// every question that reached it: 2026-10-06 (keyed by question text) and
+// 2026-10-11 (keyed by question id). Replaying them shows what the current
 // post-processing does with real model output, without a GPU.
-const recorded = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'model-replies-2026-10-06.json'), 'utf8')).replies;
+const fixture = (name) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', name), 'utf8')).replies;
+const RUNS = [['2026-10-06', fixture('model-replies-2026-10-06.json'), (q) => q.text], ['2026-10-11', fixture('model-replies-2026-10-11.json'), (q) => q.id]];
 
-test('AI: the real model\'s recorded replies pass every fixed question after post-processing', async () => {
-  const fails = [];
-  let replayed = 0;
-  for (const q of questions.filter((x) => x.expect !== 'nothing-sent')) {
-    const raw = q.after ? null : recorded[q.text];
-    const client = { chat: () => { replayed += raw != null; return Promise.resolve({ text: raw == null ? '{"picks":[]}' : raw, ms: 1 }); } };
-    const { res, shown } = await runQuestion(core, q, (text, opts) => core.recommendAI(cat, client, text, opts), cat);
-    const c = checkQuestion(q, res, cat, shown);
-    if (!c.ok) fails.push(`${q.id}: ${c.fails.join('; ')}`);
-    if (res.modelInvalid && raw != null) fails.push(`${q.id}: recorded reply now rejected`);
+for (const [day, recorded, keyOf] of RUNS) {
+  test(`AI: the real model's recorded replies (${day}) pass every fixed question after post-processing`, async () => {
+    const fails = [];
+    let replayed = 0;
+    for (const q of questions.filter((x) => x.expect !== 'nothing-sent')) {
+      const raw = q.after ? null : recorded[keyOf(q)];
+      const client = { chat: () => { replayed += raw != null; return Promise.resolve({ text: raw == null ? '{"picks":[]}' : raw, ms: 1 }); } };
+      const { res, shown } = await runQuestion(core, q, (text, opts) => core.recommendAI(cat, client, text, opts), cat);
+      const c = checkQuestion(q, res, cat, shown);
+      if (!c.ok) fails.push(`${q.id}: ${c.fails.join('; ')}`);
+      if (res.modelInvalid && raw != null) fails.push(`${q.id}: recorded reply now rejected`);
+    }
+    assert.deepEqual(fails, []);
+    assert.equal(replayed, Object.keys(recorded).length, 'every recorded reply was used');
+  });
+}
+
+test('AI, round 7: for an adult with a topic, a model pick that matches only "adult" is left out (the owner\'s 2026-10-11 replies)', async () => {
+  const titles = (r) => r.items.map((it) => (it.ids ? 'Ladder Vocabulary' : cat.byId[it.id].title));
+  const offTopic = ['speaking_DoctorVisit', 'speaking_QuickFireFlashcards'];
+  // The real model picked a kid-themed business game, Quick Fire Flashcards and Clinic Day.
+  for (const text of ['adult business english', '成人商業英文']) {
+    const kw = core.recommendRules(cat, text);
+    const r = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['finance_MiniBusinessTycoonSuper', ...offTopic] })), text);
+    assert.equal(r.source, 'ai');
+    assert.deepEqual(r.ids, kw.ids, `${text}: ${titles(r).join(', ')}`);
+    assert.ok(r.kidNote, `${text}: kid-themed note`);
+    assert.ok(!r.ids.some((id) => offTopic.includes(id)), text);
   }
-  assert.deepEqual(fails, []);
-  assert.equal(replayed, Object.keys(recorded).length, 'every recorded reply was used');
+  // 成人初學者 拼讀: Clinic Day, Ladder Talk and Hook Lab are not phonics games and match nothing else asked.
+  const ph = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['speaking_DoctorVisit', 'speaking_LadderTalk', 'speaking_HookLab'] })), '成人初學者 拼讀');
+  assert.ok(ph.ids.every((id) => cat.byId[id].skill === 'phonics'), ph.ids.join());
+  // A pick that matches the topic stays: Ladder Talk for business English.
+  const lt = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['speaking_LadderTalk', 'finance_YoungEntrepreneur'] })), 'Form 1 business english');
+  assert.ok(lt.ids.includes('finance_YoungEntrepreneur'));
+  // Not for children: the rule is for teen, adult, exam and business questions only.
+  const kid = await core.recommendAI(cat, reply(() => JSON.stringify({ picks: ['vocab_Ladder_a1', 'vocab_HealthyPlate', 'speaking_DoctorVisit'] })), '8 year old, A1, wants to learn new words, 45 min');
+  assert.ok(kid.ids.includes('speaking_DoctorVisit'));
 });
 
 test('AI: the keyword answer\'s lead stays first when the model drops or demotes it', async () => {

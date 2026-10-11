@@ -211,11 +211,15 @@
     {"id": "h-halloween-en", "text": "Halloween activity for kids", "lang": "en", "expect": "picks", "first": "speaking_LadderFestivals"},
     {"id": "h-halloween-short-zh", "text": "萬聖 活動", "lang": "zh", "expect": "picks", "first": "speaking_LadderFestivals"},
     {"id": "h-trick-or-treat-en", "text": "trick or treat game for kids", "lang": "en", "expect": "picks", "first": "speaking_LadderFestivals"},
-    {"id": "h-halloween-speaking-zh", "text": "8歲 萬聖節 口說", "lang": "zh", "expect": "picks", "first": "speaking_LadderFestivals"},
+    {"id": "h-halloween-speaking-zh", "text": "8歲 萬聖節 口說", "lang": "zh", "expect": "picks", "anyOf": ["speaking_LadderFestivals"], "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
     {"id": "f-form4-speaking-mixed", "text": "Form 4 口說", "lang": "zh", "expect": "picks", "mainAnyOf": ["speaking_LadderTalk", "speaking_QuickFireFlashcards"]},
     {"id": "f-form4-speaking-mixed-en", "text": "中四 speaking", "lang": "zh", "expect": "picks", "mainAnyOf": ["speaking_LadderTalk", "speaking_QuickFireFlashcards"]},
     {"id": "f-form4-speaking-en", "text": "Form 4 student speaking, 45 minutes", "lang": "en", "expect": "picks", "mainAnyOf": ["speaking_LadderTalk", "speaking_QuickFireFlashcards"]},
-    {"id": "f-form4-midautumn-zh", "text": "Form 4 中秋節口說", "lang": "zh", "expect": "picks", "anyOf": ["speaking_FestivalSentenceBuilder"], "mainAnyOf": ["speaking_LadderFestivals", "speaking_FestivalSentenceBuilder"]}
+    {"id": "f-form4-midautumn-zh", "text": "Form 4 中秋節口說", "lang": "zh", "expect": "picks", "anyOf": ["speaking_FestivalSentenceBuilder"], "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
+    {"id": "s-form4-midautumn-en", "text": "Form 4 Mid-Autumn speaking", "lang": "en", "expect": "picks", "anyOf": ["speaking_FestivalSentenceBuilder"], "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
+    {"id": "s-midautumn-game-zh", "text": "中秋節遊戲", "lang": "zh", "expect": "picks", "first": "speaking_LadderFestivals", "mainAnyOf": ["speaking_LadderFestivals"]},
+    {"id": "s-halloween-speaking-en", "text": "Halloween speaking", "lang": "en", "expect": "picks", "anyOf": ["speaking_LadderFestivals"], "mainAnyOf": ["speaking_FestivalSentenceBuilder"]},
+    {"id": "s-adult-business-picks-en", "text": "adult business English, 45 minutes", "lang": "en", "expect": "picks", "anyOf": ["speaking_LadderTalk"], "noneOf": ["speaking_DoctorVisit"], "notFirst": ["finance_MiniBusinessTycoonJunior", "finance_MiniBusinessTycoonSuper"], "firstNotKid": true, "kidTagged": true, "kidNote": true}
   ],
   "pairs": [
     ["Form 4 student speaking", "中四學生 口說"],
@@ -238,6 +242,7 @@
     ["New Year games for 8 year olds", "8歲 新年 遊戲"],
     ["job interview practice for adults", "成人 工作面試 練習"],
     ["8 year olds grammar and vocabulary", "8歲 文法 生字"],
-    ["Halloween activity for kids", "萬聖節 小朋友 活動"]
+    ["Halloween activity for kids", "萬聖節 小朋友 活動"],
+    ["Form 4 Mid-Autumn speaking", "Form 4 中秋節口說"]
   ]
 }

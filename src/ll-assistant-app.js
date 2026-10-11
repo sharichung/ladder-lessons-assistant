@@ -866,16 +866,28 @@
     function isKid(it) { return itemIds(it).every(function (id) { return byId[id].kid; }); }
     function maxAgeMin(it) { return Math.max.apply(null, itemIds(it).map(function (id) { return byId[id].age_min || 0; })); }
     // Every game of the asked-for skill that passed the filters, best first.
+    // No skill asked: the skill of the best keyword match (Mini Business Tycoon
+    // for "adult business english"), in AI mode too, whatever the model put first.
     function skillPool() {
-      var skills = q.skills.length ? q.skills : (items.length ? [byId[itemIds(items[0])[0]].skill] : []);
+      var top = ctx.scored.length ? ctx.scored[0].g : items.length ? byId[itemIds(items[0])[0]] : null;
+      var skills = q.skills.length ? q.skills : top ? [top.skill] : [];
       return ctx.eligible
         .filter(function (g) { return skills.indexOf(g.skill) >= 0; })
         .map(function (g, i) { var sc = ctx.scoreOf[g.id]; return { id: g.id, s: sc ? sc.s : 0, i: i }; })
         .sort(function (a, b) { return b.s - a.s || a.i - b.i; })
         .map(function (x) { return x.id; });
     }
+    // AI mode, a teen, adult, exam or business question that names a topic or
+    // a skill ("adult business english"): a model pick that matches neither,
+    // only "adult" (Clinic Day, Quick Fire Flashcards), is off topic and left
+    // out, so it cannot push a game about the topic out of the cards (round 7).
+    var focused = !!lead && q.adultSignal && (q.skills.length > 0 || ctx.scored.some(function (x) { return x.kw > 0; }));
+    function offTopic(id) {
+      var x = ctx.scoreOf[id];
+      return focused && lead.indexOf(id) < 0 && !!byId[id] && !(x && x.kw > 0) && q.skills.indexOf(byId[id].skill) < 0;
+    }
 
-    startIds.forEach(push);
+    startIds.forEach(function (id) { if (!offTopic(id)) push(id); });
 
     // Kid-themed games below all others for teen and adult queries, never
     // first, never hidden (A2). Older kid-themed games come first (2A).
@@ -924,6 +936,8 @@
     // games of the same skill, then any other match, then classroom tools.
     if (items.length < N.min) {
       var fits = function (g) { return !(q.adultSignal && g.kid); };
+      // AI mode: the keyword answer's cards first, in its order.
+      if (lead) (ctx.kwIds || []).forEach(function (id) { if (items.length < N.min) push(id); });
       ctx.rel.forEach(function (x) { if (items.length < N.min) push(x.g.id); });
       skillPool().forEach(function (id) { if (items.length < N.min) push(id); });
       ctx.scored.forEach(function (x) { if (items.length < N.min && fits(x.g)) push(x.g.id); });
@@ -1019,10 +1033,19 @@
       ctx.facetIds = picks;
       start = picks.concat(start.filter(function (id) { return picks.indexOf(id) < 0; }));
     }
+    // A festival and a skill named: the festival game most about that skill
+    // comes first, before games that only list the festival's name (round 7).
+    var festPick = ctx.facetIds ? null : festivalSkillPick(cat, q, ctx.scored.map(function (x) { return x.g.id; }));
+    if (festPick) {
+      ctx.festPick = festPick;
+      start = [festPick].concat(start.filter(function (id) { return id !== festPick; }));
+    }
     var fin = finalize(ctx, start);
     if (!fin.items.length) return withCtx(result(q, { kind: 'none' }), ctx);
     // AI mode keeps the keyword lead; with several skills named, every skill's game.
     ctx.lead = ctx.facetIds && ctx.facetIds.length >= 2 ? ctx.facetIds.slice() : keywordLead(ctx, fin.items);
+    // AI mode tops up from this answer when it drops a model pick.
+    ctx.kwIds = fin.items.map(function (it) { return itemIds(it)[0]; });
     return withCtx(result(q, { kind: 'picks', items: fin.items, kidNote: fin.kidNote, narrow: !q.hasAge && !q.hasLevel }), ctx);
   }
 
@@ -1257,7 +1280,8 @@
   }
 
   // The cards AI mode must keep: the keyword answer's first card, and its
-  // best keyword match if a free game was put in front of it.
+  // best keyword match if a free game was put in front of it. With a festival
+  // and a skill named, the best match is the festival game for that skill.
   function keywordLead(ctx, items) {
     function sc(it) { return Math.max.apply(null, itemIds(it).map(function (id) { var x = ctx.scoreOf[id]; return x && x.kw > 0 ? x.s : -1; })); }
     var lead = [];
@@ -1265,7 +1289,8 @@
     var best = items.filter(function (it) { return sc(it) >= 0; })
       .map(function (it, i) { return { it: it, s: sc(it), i: i }; })
       .sort(function (a, b) { return b.s - a.s || a.i - b.i; })[0];
-    if (best && lead.indexOf(itemIds(best.it)[0]) < 0) lead.push(itemIds(best.it)[0]);
+    var bestId = ctx.festPick && flatIds(items).indexOf(ctx.festPick) >= 0 ? ctx.festPick : best && itemIds(best.it)[0];
+    if (bestId && lead.indexOf(bestId) < 0) lead.push(bestId);
     return lead;
   }
 
@@ -1610,6 +1635,42 @@
   function festivalGame(cat, it) {
     return itemIds(it).every(function (id) { return indexGame(cat.byId[id]).kw.some(function (k) { return FESTIVAL_KEYS[k.key]; }); });
   }
+  // The index keys of each skill's words (SKILL_WORDS), as indexGame writes them.
+  var SKILL_KEYS = Object.create(null);
+  Object.keys(SKILL_WORDS).forEach(function (s) {
+    var keys = SKILL_KEYS[s] = Object.create(null);
+    SKILL_WORDS[s].en.split(' ').forEach(function (w) { w = norm(w); keys[conceptOf(w) || 'w:' + w] = true; });
+    SKILL_WORDS[s].zh.split(' ').forEach(function (w) { keys[conceptOf(w) || zhConceptIn(w) || 'z:' + w] = true; });
+  });
+  // How much a game is about the skills asked for: its catalogue skill, plus
+  // each of its keywords and title words that names one of them. Festival
+  // names and other topic words do not count.
+  function skillFit(g, skills) {
+    var ix = indexGame(g), n = skills.indexOf(g.skill) >= 0 ? 1 : 0;
+    skills.forEach(function (s) {
+      var keys = SKILL_KEYS[s];
+      if (!keys) return;
+      ix.kw.forEach(function (k) { if (keys[k.key]) n++; });
+      ix.titleKeys.forEach(function (k) { if (keys[k]) n++; });
+    });
+    return n;
+  }
+  // A question with a festival (its name, or 節日/festival) and a skill: the
+  // festival game most about that skill (Festival Speaking Builder for
+  // 「中秋節口說」), not the one that lists the most festival names. On a tie,
+  // the first of ids (the higher score). null without a festival or a skill,
+  // or when no festival game fits the skill: then the usual order decides.
+  function festivalSkillPick(cat, q, ids) {
+    if (!(q.cset && q.cset.festival) || !q.skills || !q.skills.length) return null;
+    var best = null, bestFit = 0;
+    ids.forEach(function (id) {
+      var g = cat.byId[id];
+      if (!g || (q.adultSignal && g.kid) || !festivalGame(cat, { id: id })) return;
+      var fit = skillFit(g, q.skills);
+      if (fit > bestFit) { best = id; bestFit = fit; }
+    });
+    return best;
+  }
   function itemKid(cat, it) { return itemIds(it).every(function (id) { return cat.byId[id].kid; }); }
 
   // The plan for an answer (1.2): Main is the game with the highest score after
@@ -1629,9 +1690,12 @@
     var minutes = q.minutes == null ? null : q.minutes, kidNote = !!res.kidNote;
     var kid = function (x) { return itemKid(cat, x.it); };
     var fest = function (x) { return festivalGame(cat, x.it); };
-    // Main: the highest score that is not kid-themed (for an older learner) and
-    // not a festival game when the question names no festival.
-    var main = ranked.filter(function (x) { return !(older && kid(x)) && !(noFest && fest(x)); })[0] ||
+    // Main: with a festival and a skill named, the festival game most about
+    // that skill. Otherwise the highest score that is not kid-themed (for an
+    // older learner) and not a festival game when the question names no festival.
+    var festPick = festivalSkillPick(cat, q, ranked.map(function (x) { return itemIds(x.it)[0]; }));
+    var main = ranked.filter(function (x) { return itemIds(x.it)[0] === festPick; })[0] ||
+      ranked.filter(function (x) { return !(older && kid(x)) && !(noFest && fest(x)); })[0] ||
       (older && ranked.filter(function (x) { return !kid(x); })[0]) || ranked[0];
     var rest = ranked.filter(function (x) { return x !== main; });
     var its = function (list) { return list.map(function (x) { return x.it; }); };
