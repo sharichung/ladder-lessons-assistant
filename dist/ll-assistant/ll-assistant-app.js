@@ -1045,16 +1045,17 @@
     // A festival named: at least one festival game that lists it is in the
     // cards, in place of the last card that is not part of the lead, so the
     // model's picks or a skill's extra games never push them all out (round 8).
-    // The one game of each skill named (several skills) is never replaced.
+    // With several skills named and no room left, it takes the last skill's
+    // card: a festival named always gets a festival game (round 9, 3B).
     if (q.cset && q.cset.festival && !items.some(function (it) { return festivalGame(ctx.cat, it); })) {
       var fx = ctx.scored.filter(function (x) { return festivalGame(ctx.cat, { id: x.g.id }) && !(q.adultSignal && x.g.kid); })[0];
-      var keep = (lead || []).concat(ctx.facetIds || []);
-      if (fx) {
-        for (var j = items.length - 1; j >= 0 && items.length >= N.max; j--) {
-          if (!itemIds(items[j]).some(function (id) { return keep.indexOf(id) >= 0; })) items.splice(j, 1);
+      var notIn = function (list) { return function (it) { return !itemIds(it).some(function (id) { return list.indexOf(id) >= 0; }); }; };
+      [(lead || []).concat(ctx.facetIds || []), lead || []].forEach(function (keep) {
+        for (var j = items.length - 1; fx && j >= 0 && items.length >= N.max; j--) {
+          if (notIn(keep)(items[j])) items.splice(j, 1);
         }
-        if (items.length < N.max) items.push({ id: fx.g.id });
-      }
+      });
+      if (fx && items.length < N.max) items.push({ id: fx.g.id });
     }
     if (!items.some(function (it) { return it.kid; })) kidNote = false;
     return { items: items, kidNote: kidNote };
@@ -1145,9 +1146,11 @@
     var fin = finalize(ctx, start);
     if (!fin.items.length) return withCtx(result(q, { kind: 'none' }), ctx);
     // AI mode keeps the keyword lead; with several skills named, every skill's game
-    // and the answer's festival games (round 8).
+    // still in the answer and the answer's festival games (round 8, round 9).
+    var finIds = flatIds(fin.items);
     ctx.lead = ctx.facetIds && ctx.facetIds.length >= 2
-      ? ctx.facetIds.concat(fin.items.filter(function (it) { return festivalGame(cat, it) && ctx.facetIds.indexOf(itemIds(it)[0]) < 0; }).map(function (it) { return itemIds(it)[0]; }))
+      ? ctx.facetIds.filter(function (id) { return finIds.indexOf(id) >= 0; })
+        .concat(fin.items.filter(function (it) { return festivalGame(cat, it) && ctx.facetIds.indexOf(itemIds(it)[0]) < 0; }).map(function (it) { return itemIds(it)[0]; }))
       : keywordLead(ctx, fin.items);
     // AI mode tops up from this answer when it drops a model pick.
     ctx.kwIds = fin.items.map(function (it) { return itemIds(it)[0]; });

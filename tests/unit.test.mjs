@@ -651,12 +651,19 @@ test('round 8 review: several skills with a festival, festivals on no list, New 
   const mainIn = (r) => mainOf(core.buildPlan(r, cat))[0];
   const ai = (text, picks) => core.recommendAI(cat, reply((m, schema) => JSON.stringify({ picks: picks.filter((id) => enumOf(schema).includes(id)) })), text);
   const skillOf = (r) => r.items.map((it) => cat.byId[(it.ids || [it.id])[0]].skill);
-  // Each skill named keeps its card; the festival game comes where there is room, the same in both modes.
-  for (const t of ['Christmas grammar and vocabulary 20 minutes for 9 year olds', '聖誕節 文法同生字 9歲 20分鐘']) {
-    const k = core.recommendRules(cat, t), a = await ai(t, [LF]);
-    assert.deepEqual(skillOf(k), ['grammar', 'vocab'], t);
-    assert.deepEqual(a.ids, k.ids, `AI = keyword: ${t}`);
+  // No room for every skill and the festival: the festival game takes the last
+  // skill's card (round 9, 3B), the same in both modes, whatever the model picks.
+  for (const t of ['Christmas grammar and vocabulary 20 minutes for 9 year olds', '聖誕節 文法同生字 9歲 20分鐘', 'Christmas grammar and vocabulary 20 分鐘']) {
+    const k = core.recommendRules(cat, t);
+    assert.deepEqual(skillOf(k), ['grammar', 'speaking'], t);
+    assert.ok(k.ids.includes(LF), `keyword: ${t}`);
+    for (const picks of [[LF], ['vocab_FruitAtoZ', 'vocab_Ladder_a1'], ['grammar_QuestionMaster', 'vocab_Ladder_a1']]) {
+      assert.deepEqual((await ai(t, picks)).ids, k.ids, `AI = keyword: ${t} ${picks}`);
+    }
   }
+  // Three skills and a festival in three cards: the third skill's card goes.
+  const three = core.recommendRules(cat, 'Christmas grammar, vocabulary and listening for 9 year olds, 45 min');
+  assert.ok(three.ids.includes(LF) && skillOf(three).includes('grammar') && skillOf(three).includes('vocab'), three.ids.join());
   const roomy = core.recommendRules(cat, 'Christmas grammar and vocabulary for 9 year olds, 45 min');
   assert.ok(roomy.ids.includes(LF) && skillOf(roomy).includes('grammar') && skillOf(roomy).includes('vocab'));
   assert.ok((await ai('Christmas grammar and vocabulary for 9 year olds, 45 min', ['vocab_FruitAtoZ'])).ids.includes(LF));
