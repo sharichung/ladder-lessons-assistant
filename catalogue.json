@@ -576,7 +576,7 @@
       "mode": "led",
       "description_en": "The problem comes first, then who can help, so students learn why each job matters, not just its name. 13 helpers over 9 levels, with a British and American switch",
       "description_zh": "先出難題，再諗邊個幫到手，學生學到每份工點解重要，唔止記名。13 個職業、9 個關卡，有英式／美式切換",
-      "keywords": "職業 job 工作 警察 police 消防 firefighter 護士 nurse 求助 help 問路 社區",
+      "keywords": "職業 job 警察 police 消防 firefighter 護士 nurse 求助 help 問路 社區",
       "in_public_build": false
     },
     {
@@ -761,8 +761,8 @@
       "tier": "parent",
       "free": false,
       "mode": "led",
-      "description_en": "Nine festivals, five modes, ending in rapid fire. They write the sentence right before they have to say it, and you can change level or mode mid-game without restarting",
-      "description_zh": "九個節日、五個模式，最後係限時快答。先寫啱句子再開口講，難度同模式中途隨時轉，唔使重新開始",
+      "description_en": "Eleven festivals, five modes, ending in rapid fire. They write the sentence right before they have to say it, and you can change level or mode mid-game without restarting",
+      "description_zh": "十一個節日、五個模式，最後係限時快答。先寫啱句子再開口講，難度同模式中途隨時轉，唔使重新開始",
       "keywords": "節日 festival 砌句 sentence 寫 口說 speaking Halloween Bonfire Night Thanksgiving Christmas New Year's Day Lunar New Year Mother's Day Easter Dragon Boat Festival Father's Day Mid-Autumn Festival",
       "in_public_build": false
     },
