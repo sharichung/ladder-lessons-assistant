@@ -757,7 +757,9 @@ test('mailto: no recipient, the subject, the link and one line per step with the
 test('analytics: the plan events are fixed names in the allowlist', () => {
   const { internals } = require(path.join(ROOT, 'src', 'll-assistant-app.js'));
   for (const e of ['ll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link']) assert.ok(internals.EVENTS.includes(e), e);
-  assert.equal(internals.EVENTS.length, 11);
+  // 2026-10-18: four counts for modes inside games and "found nothing"; never the words.
+  for (const e of ['ll_practice_shown', 'll_practice_click', 'll_no_match', 'll_tell_us']) assert.ok(internals.EVENTS.includes(e), e);
+  assert.equal(internals.EVENTS.length, 15);
 });
 
 // ---------- AI mode post-processing with scripted models ----------
@@ -1060,4 +1062,42 @@ test('colour budget: coral only on the enabled primary button, no coral or red b
   // A5: focus uses :focus-visible and the yellow ring
   assert.doesNotMatch(css.replace(/\.ll-input:focus,|button:focus \{ outline: none; \}/g, ''), /:focus(?![-\w])/);
   assert.match(css, /--ll-ring: 0 0 0 4px var\(--ll-yellow\)/);
+});
+
+// ---------- modes inside a game (owner, 2026-10-18) ----------
+
+test('practices: every mode row is merged onto a real game with a plain ?key=value link', () => {
+  const rows = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'practices.json'), 'utf8'));
+  const merged = compactRaw.games.reduce((n, g) => n + (g.pr ? g.pr.length : 0), 0);
+  assert.equal(merged, rows.length);
+  for (const g of compactRaw.games) for (const r of g.pr || []) {
+    assert.match(r.q, /^\?[a-z]+=[\w,.-]+(&[a-z]+=[\w,.-]+)*$/i, `${g.id} ${r.m}`);
+    assert.ok(r.m, `${g.id} has a mode name`);
+  }
+});
+
+test('practices: the teacher\'s words pick the matching mode on a picked card; no match shows nothing', () => {
+  const byTitle = (t) => cat.games.find((g) => g.title === t);
+  const pick = (title, text) => { const r = core.practiceFor(byTitle(title), text); return r ? r.m + (r.s ? ' · ' + r.s : '') : null; };
+  assert.equal(pick('Question Master', 'guess the question word from the answer'), 'Guess it · Question words');
+  assert.equal(pick('Question Master', '前文後理 對話'), 'Chat it · Question words');
+  assert.equal(pick('Tense Studio', 'adverbs of frequency for P4'), 'Frequency Chart');
+  assert.equal(pick('Tense Studio', 'past continuous practice'), 'Fill in the Blanks · Past Continuous');
+  assert.equal(pick('Advice Studio', 'he she we they should'), 'Who should?');
+  assert.equal(pick('Determiner Studio', 'some and any'), 'Choose · some / any');
+  assert.equal(pick('Ladder Festivals', 'halloween do and don\'t should'), 'Do & Don’t · Halloween');
+  assert.equal(pick('Question Master', 'age 8 student, 30 min'), null);
+  assert.equal(pick('Question Master', 'question master'), null, 'the game\'s own title is not a mode');
+  assert.equal(pick('Ladder Phonics', 'short a sounds'), null, 'a game without modes shows nothing');
+});
+
+test('practices: a strong mode match finds a game the keywords miss; one stray word never does', () => {
+  const run = (text) => { const r = core.recommendRules(cat, text); return r.kind === 'picks' ? r.ids[0] : r.kind; };
+  assert.equal(run('adverbs of frequency, age 9'), 'grammar_TenseStudio');
+  assert.equal(run('a few a little a lot of'), 'grammar_DeterminerStudio');
+  assert.equal(run('some any'), 'grammar_DeterminerStudio');
+  assert.equal(run('who should he she we they'), 'grammar_AdviceStudio');
+  for (const off of ['how do I fix my car', 'how do i cook rice', 'what time is it', 'how much is it', 'I want to warm up at the gym', 'should i buy a car']) {
+    assert.notEqual(core.recommendRules(cat, off).kind, 'picks', off);
+  }
 });

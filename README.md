@@ -100,6 +100,7 @@ Optional attributes on the script tag:
 | `catalogue.json` | The only source of games: ids, titles, paths, plans, `in_public_build`, descriptions, keywords | Exported from `games/library.html` |
 | `ages.csv` | Per game: `age_min`, `age_max`, `level_min`, `level_max`, `kid_theme`, `parts` (the game's own sections, in screen order, separated by " \| "). `parts_basis`, `prefill_basis`, `your_notes` and `description_en` are notes for you and are not used | You |
 | `data/teacher-fields.csv` | Optional per-game "how to run it" line (`how_to_run_en`, `how_to_run_zh`) | You |
+| `data/practices.json` | Modes inside the games (2026-10-18): one row per mode or set, with a deep-link query, e.g. Question Master › Guess it · Question words = `?mode=guess&set=wh`. 109 rows in 7 games | Exported from the site: `node scripts/ll_practices.mjs` in the site repo writes `games/_brand/ll-practices.json`; copy it here as `data/practices.json` |
 | `ll-tokens.css` | Colours, radii, shadows and fonts copied from `library.html` | Copied from the site |
 
 **Building:** run `npm run build` to merge all of this into `dist/ll-assistant/catalogue.compact.json`.
@@ -125,6 +126,12 @@ Optional attributes on the script tag:
 - **"How to run it" appears only for games that have their own line** in `teacher-fields.csv`. Every card says Teacher-led or Student solo on its plain meta line.
 
 Ladder Talk's `age_min` is 10 (changed from 16 because teen topics were added). Grammar Detective's `age_min` is 10 (from 8), so 「小三 文法」 and "Year 3 grammar" no longer get it.
+
+**Modes inside a game (owner, 2026-10-18).** "Teachers know what they want to practise but cannot find it: often we have it, they just don't know." The build merges `data/practices.json` onto each game as `pr` (mode, set, link, search words); a row whose game is not in `catalogue.json`, or whose link is not a plain `?key=value` query, stops the build.
+- **On a picked card**, the mode that best matches the teacher's words is shown as **Start with: Frequency Chart ↗** / 「由呢度開始：」. A mode name counts 3, a set name 2, a search word 1; the game's own title words don't count; a number only counts inside a set name ("Type 2"). It needs 2 or more, otherwise the card has no line. Ranking is unchanged.
+- **When no game's keywords match** (the answer would be "could not match"), a strong match on a mode still finds the game: two different words that point at a mode, scoring 4 or more. "adverbs of frequency" → Tense Studio, "a few a little a lot of" or "some any" → Determiner Studio, "who should he she we they" → Advice Studio. Everyday words alone never do: "how do I fix my car", "how much is it", "should i buy a car" still get "could not match".
+- **Opening a mode** follows the same rule as opening a game: on the library page, a locked card shows the plan pop-up, an open card opens at its own address plus the mode's query. Elsewhere a free game opens at origin + path + query, a paid one goes to `/library`.
+- **"Can't find it? Tell us what you want to practise"** / 「搵唔到？話我知你想練乜」 sits under every plan and every "could not match". It is a button, like "Email it to myself": the click opens the teacher's own mail app with their words filled in, to hello@ at the site's own domain. Nothing is sent unless they press Send there.
 
 **Parts** (37 of 67 games) are used only by the lesson plan. A blank `parts` cell means not known: that game is never split into steps. Tense Studio's part order is your guess (noted in the CSV); the widget shows it as written.
 
@@ -387,9 +394,13 @@ No border is ever coral or red, in any state. Tests check every element's comput
 | `ll_plan_send_copy` | "Copy link" or "or copy the link" is clicked | same pattern | same pattern |
 | `ll_plan_send_share` | "Share" is clicked (phones) | same pattern | same pattern |
 | `ll_plan_opened_from_link` | The widget opens from a plan link | same pattern | same pattern |
+| `ll_practice_shown` | A card shows a "Start with" mode | same pattern | same pattern |
+| `ll_practice_click` | A "Start with" mode is clicked | same pattern | same pattern |
+| `ll_no_match` | An answer found no game (a count only: how often teachers find nothing) | same pattern | same pattern |
+| `ll_tell_us` | "Can't find it? Tell us" is clicked | same pattern | same pattern |
 
 - The only parameter is `event_category: "ll_assistant"`. No query text, no game id, no plan, no language.
-- **What the page needs:** a global `gtag` function (the standard GA4 gtag.js snippet defines it) and the standard Clarity snippet. The widget calls `window.gtag` and `window.clarity` at the moment of each event and sends nothing when they are missing, so a site that loads GA4 only through a Google Tag Manager container, with no gtag snippet, gets no `ll_` events in GA4. A browser check runs all 11 events through the built files on a page with the official GA4 and Clarity inline snippets: each reaches GA4's `dataLayer` as `['event', name, {event_category: 'll_assistant'}]` and Clarity's queue as `['event', name]`.
+- **What the page needs:** a global `gtag` function (the standard GA4 gtag.js snippet defines it) and the standard Clarity snippet. The widget calls `window.gtag` and `window.clarity` at the moment of each event and sends nothing when they are missing, so a site that loads GA4 only through a Google Tag Manager container, with no gtag snippet, gets no `ll_` events in GA4. A browser check runs all 15 events through the built files on a page with the official GA4 and Clarity inline snippets: each reaches GA4's `dataLayer` as `['event', name, {event_category: 'll_assistant'}]` and Clarity's queue as `['event', name]`.
 - `ll_ai_offered` fires only on a device that can run the AI (a desktop browser with WebGPU and enough memory and storage); elsewhere `ll_fallback_shown` fires instead. Both once per page.
 - GA4 shows new event names in DebugView at once and in its standard reports within 24 to 48 hours. To filter reports by `event_category`, register it as a custom dimension in GA4 (optional; the event names alone are enough to count).
 - GA4's own script adds its standard fields to every event (page URL, referrer, page title, browser language, screen size, its client and session ids). That is normal page analytics, not data from the conversation.

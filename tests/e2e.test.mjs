@@ -27,7 +27,9 @@ const PORT = 8000 + Math.floor(Math.random() * 900);
 const BASE = `http://127.0.0.1:${PORT}`;
 const DEMO = `${BASE}/demo.html`;
 const EVENTS = ['ll_ai_offered', 'll_download_started', 'll_download_finished', 'll_fallback_shown', 'll_game_click',
-  'll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link'];
+  'll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link',
+  // 2026-10-18: modes inside games and "found nothing" (counts only)
+  'll_practice_shown', 'll_practice_click', 'll_no_match', 'll_tell_us'];
 const EVENT_RE = new RegExp(EVENTS.join('|'), 'g');
 const MB = Math.ceil(cat.model.bytes / 1048576);
 const TOKENS = Object.fromEntries((fs.readFileSync(path.join(ROOT, 'll-tokens.css'), 'utf8').match(/--[a-z0-9-]+:[^;]+/gi) || []).map((d) => [d.split(':')[0].slice(2), d.split(':').slice(1).join(':').trim()]));
@@ -1831,5 +1833,37 @@ test('Halloween finds Ladder Festivals in keyword mode (&llai=off) and in AI mod
     assert.equal(r.turn.kidNote, true, text);
     assert.equal(await r.el.locator('.ll-cards > li.ll-small').count(), 1, `${text}: kid-themed note`);
   }
+  await context.close();
+});
+
+// ---------- modes inside a game (owner, 2026-10-18) ----------
+
+test('Modes inside a game: "Start with" opens the mode on an open library card, a locked card shows the pop-up; "Tell us" is a button', async () => {
+  const { context, page } = await newPage();
+  await context.route('**/modes-page.html', (r) => r.fulfill({ contentType: 'text/html', body:
+    '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title></head><body>' +
+    '<a class="card" data-tier="parent" data-title="Tense Studio" href="grammar/grammar_TenseStudio.html">Tense Studio</a>' +
+    '<a class="card is-locked" data-tier="parent" data-title="Determiner Studio" href="grammar/grammar_DeterminerStudio.html">Determiner Studio</a>' +
+    '<div id="lock" hidden>Locked</div>' +
+    '<script>document.querySelectorAll("a.card.is-locked").forEach(function(a){a.addEventListener("click",function(e){e.preventDefault();document.getElementById("lock").hidden=false;});});</script>' +
+    '<script src="/dist/ll-assistant/ll-assistant.js" defer></script></body></html>' }));
+  await context.route('**/grammar/grammar_TenseStudio.html?mode=freq', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>freq</title>' }));
+  await openWidget(page, `${BASE}/modes-page.html`);
+
+  let { el } = await ask(page, 'adverbs of frequency, age 9');
+  const line = el.locator('.ll-card .ll-pr');
+  assert.equal(await line.count(), 1, 'one "Start with" line');
+  assert.match(await line.innerText(), /Start with:\s*Frequency Chart/);
+  assert.equal(await page.locator('#ll-assistant a[href^="mailto"]').count(), 0, 'no mailto address in the page');
+  assert.equal(await el.locator('.ll-tell button').count(), 1, '"Tell us" is a button');
+
+  ({ el } = await ask(page, 'some any'));
+  await el.locator('.ll-pr-b').first().click();
+  await page.waitForFunction(() => !document.getElementById('lock').hidden);
+  assert.match(page.url(), /modes-page\.html$/, 'a locked card stays on the page');
+
+  ({ el } = await ask(page, 'adverbs of frequency, age 9'));
+  await el.locator('.ll-pr-b').first().click();
+  await page.waitForURL(/grammar_TenseStudio\.html\?mode=freq$/);
   await context.close();
 });
