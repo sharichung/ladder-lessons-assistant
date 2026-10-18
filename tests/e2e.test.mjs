@@ -1083,10 +1083,12 @@ test('Game clicks hand off to the host page: paid games never navigate by themse
     await e.page.waitForFunction(() => document.getElementById('ll-assistant').hidden, null, { timeout: 2000 }); // data-avoid: the widget steps aside for the pop-up
     await e.context.close();
 
-    // 2. Free game, host card on the page: the page's card opens it at origin + path.
+    // 2. Free game, host card on the page: the card's address opens in a new tab; the results stay.
     e = await setup({ keepCards: true });
     await clickCard(e.page, 'telling the time for kids', 'Telling the Time');
-    await e.page.waitForURL(origin + '/life/life_TellingTheTime');
+    await e.page.waitForFunction(() => window.__opened.length === 1);
+    assert.deepEqual(await e.page.evaluate(() => window.__opened), [origin + '/life/life_TellingTheTime']);
+    assert.equal(e.page.url(), url, `${origin}: the library stays in this tab`);
     assert.equal(await clicks(e.page), 1);
     await e.context.close();
 
@@ -1864,6 +1866,8 @@ test('Modes inside a game: "Start with" opens the mode on an open library card, 
 
   ({ el } = await ask(page, 'adverbs of frequency, age 9'));
   await el.locator('.ll-pr-b').first().click();
-  await page.waitForURL(/grammar_TenseStudio\.html\?mode=freq$/);
+  await page.waitForFunction(() => window.__opened.length === 1);
+  assert.match((await page.evaluate(() => window.__opened))[0], /grammar_TenseStudio\.html\?mode=freq$/, 'an open card\'s mode opens in a new tab');
+  assert.match(page.url(), /modes-page\.html$/, 'the results stay in this tab');
   await context.close();
 });

@@ -24,6 +24,7 @@
       launcher: 'Find a game',
       title: 'Lesson game finder',
       close: 'Close',
+      below: 'More below',
       privacy: 'Runs in your browser. What you type is not sent to us.',
       modeAI: 'AI suggestions can be wrong.',
       more: 'more',
@@ -108,6 +109,7 @@
       launcher: '幫我揀遊戲',
       title: '課堂遊戲小助手',
       close: '關閉',
+      below: '下面還有',
       privacy: '喺你部機運行。你打嘅內容唔會傳送畀我哋。',
       modeAI: 'AI 建議可能有錯。',
       more: '更多',
@@ -2064,6 +2066,16 @@
     return svg;
   }
 
+  function closeIcon() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    [['viewBox', '0 0 24 24'], ['width', '16'], ['height', '16'], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'll-x']].forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    var path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', 'M6 6l12 12M18 6L6 18');
+    svg.appendChild(path);
+    return svg;
+  }
+
   function inRoot(node) { return !!(S.root && node && node.nodeType && S.root.contains(node)); }
   // The saved plan, from the link only: never the model, never a question.
   // Unknown games are left out; with none left, the usual empty state stays.
@@ -2123,7 +2135,8 @@
 
   function buildPanel() {
     S.titleEl = el('h2', { 'class': 'll-title', id: 'll-title' });
-    S.closeBtn = el('button', { type: 'button', 'class': 'll-close', on: { click: close } }, ['×']);
+    // An SVG cross, not the × character: the heading font draws × below the middle of the circle.
+    S.closeBtn = el('button', { type: 'button', 'class': 'll-close', on: { click: close } }, [closeIcon()]);
     S.privacyText = el('span');
     S.privacy = el('p', { 'class': 'll-privacy' }, [lockIcon(), S.privacyText]);
     S.offer = el('div', { 'class': 'll-offer', hidden: true, 'aria-live': 'polite' });
@@ -2133,11 +2146,19 @@
     S.sendBtn = el('button', { type: 'button', 'class': 'll-send ll-cta', disabled: true, on: { click: function () { submit(); } } });
     // No <form>: analytics tools that count form starts and submits ignore the widget.
     var composer = el('div', { 'class': 'll-composer' }, [S.inputLabel, S.input, S.sendBtn]);
+    S.composer = composer;
+    // "More below": the first result card can fill the view, so say when the list goes on.
+    S.downText = el('span');
+    S.down = el('button', { type: 'button', 'class': 'll-down', hidden: true, tabindex: '-1', on: { click: function () {
+      S.log.scrollBy({ top: Math.round(S.log.clientHeight * 0.8), behavior: 'smooth' });
+    } } }, [S.downText, el('span', { 'aria-hidden': 'true', text: ' ↓' })]);
     S.panel = el('div', { id: 'll-panel', 'class': 'll-panel', role: 'dialog', 'aria-labelledby': 'll-title', hidden: true }, [
       el('div', { 'class': 'll-head' }, [S.titleEl, S.closeBtn]),
-      S.privacy, S.offer, S.log, composer,
+      S.privacy, S.offer, S.log, composer, S.down,
     ]);
     S.root.appendChild(S.panel);
+    S.log.addEventListener('scroll', syncDown, { passive: true });
+    if (typeof MutationObserver !== 'undefined') new MutationObserver(function () { requestAnimationFrame(syncDown); }).observe(S.log, { childList: true, subtree: true });
     // A rotation or resize changes line breaks: measure the descriptions again.
     var lastWidth = 0;
     var refit = function () {
@@ -2154,7 +2175,7 @@
       });
       fitDescs(S.log);
     };
-    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(refit).observe(S.log);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(function () { refit(); syncDown(); }).observe(S.log);
     else window.addEventListener('resize', refit);
     applyLabels();
     renderLog();
@@ -2162,6 +2183,15 @@
 
   // Static labels. "data-l" is a one-character code (1 English, 2 Chinese) so
   // a session recording cannot read the language from an attribute.
+  function syncDown() {
+    if (!S.down || !S.log) return;
+    var left = S.log.scrollHeight - S.log.scrollTop - S.log.clientHeight;
+    var show = left > 40 && !!S.log.querySelector('.ll-card');
+    S.down.hidden = !show;
+    S.panel.classList.toggle('ll-has-below', show);
+    if (show && S.composer) S.down.style.bottom = (S.composer.offsetHeight + 10) + 'px';
+  }
+
   function applyLabels(lang) {
     lang = lang || uiLang();
     var L = t(lang);
@@ -2169,6 +2199,7 @@
     S.panel.setAttribute('data-l', lang === 'zh' ? '2' : '1');
     S.titleEl.textContent = L.title;
     S.closeBtn.setAttribute('aria-label', L.close);
+    S.downText.textContent = L.below;
     S.privacyText.textContent = L.privacy;
     S.input.placeholder = L.placeholder;
     S.inputLabel.textContent = L.inputLabel;
@@ -2534,7 +2565,7 @@
     track('ll_game_click');
     var host = null;
     try { host = document.querySelector('a.card[data-title="' + cssString(g.title) + '"]'); } catch (e) { host = null; }
-    if (host) { host.click(); return; }
+    if (host) { clickHost(host); return; }
     if (g.pub) {
       try { window.open(location.origin + g.path, '_blank', 'noopener'); } catch (e) { /* popup blocked */ }
     } else {
@@ -2542,9 +2573,41 @@
     }
   }
 
+  // The library's own card decides first (a locked card shows the plan pop-up).
+  // When nothing on the page stops the click, the game opens in a new tab, so the
+  // teacher's search results stay where they were.
+  function clickHost(host, url) {
+    var href = url || host.href;
+    var go = function (e) {
+      if (e.target !== host || e.defaultPrevented) return;
+      e.preventDefault();
+      try { window.open(href, '_blank', 'noopener'); } catch (err) { /* popup blocked */ }
+    };
+    window.addEventListener('click', go);
+    try { host.click(); } finally { window.removeEventListener('click', go); }
+  }
+
   function cssString(v) { return String(v).replace(/["\\]/g, '\\$&').replace(/\n/g, ' '); }
 
   var TIER_CODE = { free: '1', parent: '2', teacher: '3' };
+  // The library's own plan icons (#ico-free, #ico-parent, #ico-teacher), drawn
+  // inline so they also show on pages that do not carry the library's symbols.
+  var TIER_ICON = {
+    free: ['M6 13.5h20v12a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 6 25.5Z', 'M4 8.5h24v5H4Z', 'M16 8.5V28', 'M16 8.5C16 5.5 13.5 3.5 11 4.5s-2 4 5 4Z', 'M16 8.5c0-3 2.5-5 5-4s2 4-5 4Z'],
+    parent: ['M16 27S4.5 20 4.5 12.5A6.5 6.5 0 0 1 16 8.6a6.5 6.5 0 0 1 11.5 3.9C27.5 20 16 27 16 27Z'],
+    teacher: ['M16 5 30 12 16 19 2 12Z', 'M8 15.2V22c0 2.2 3.6 4 8 4s8-1.8 8-4v-6.8', 'M28 13v7'],
+  };
+  function tierIcon(tier) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    [['viewBox', '0 0 32 32'], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'll-tier-ico']].forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    (TIER_ICON[tier] || TIER_ICON.parent).forEach(function (d) {
+      var p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      svg.appendChild(p);
+    });
+    return svg;
+  }
 
   // The plan label is the only coloured pill. Skill, mode, level and
   // kid-themed follow as one plain line: "Speaking · Teacher-led · Level A2".
@@ -2554,7 +2617,7 @@
     if (lt) parts.push(fmt(L.level, { l: lt }));
     if (it.kid) parts.push(L.kid);
     return el('div', { 'class': 'll-meta' }, [
-      el('span', { 'class': 'll-tier', 'data-t': TIER_CODE[g.tier] || '2', text: L.tier[g.tier] || '' }),
+      el('span', { 'class': 'll-tier', 'data-t': TIER_CODE[g.tier] || '2' }, [tierIcon(g.tier), L.tier[g.tier] || '']),
       el('span', { text: parts.filter(Boolean).join(' · ') }),
     ]);
   }
@@ -2824,7 +2887,7 @@
     if (host) {
       if (host.classList.contains('is-locked')) { host.click(); return; }
       var u = new URL(host.getAttribute('href'), location.href);
-      location.assign(u.pathname + r.q);
+      try { window.open(location.origin + u.pathname + r.q, '_blank', 'noopener'); } catch (e) { /* popup blocked */ }
       return;
     }
     if (g.pub) {
