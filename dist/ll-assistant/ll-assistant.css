@@ -110,9 +110,11 @@
   height: min(600px, calc(100vh - 2 * var(--ll-y)));
   height: min(600px, calc(100dvh - 2 * var(--ll-y)));
   display: flex; flex-direction: column;
-  background: var(--ll-cream);
+  /* White with an ink border: the library page is cream, so a cream panel melted into it. */
+  background: #fff;
+  border: 3px solid var(--ll-ink);
   border-radius: var(--ll-r-md);
-  box-shadow: var(--ll-sh-lift);
+  box-shadow: var(--ll-sh-lift), var(--ll-sh-rung);
   overflow: hidden;
 }
 #ll-assistant .ll-panel[hidden] { display: none; }
@@ -130,7 +132,19 @@
 /* Chinese headings: weight 700 and 0.02em (style guide §2). data-l="2" is Chinese. */
 #ll-assistant .ll-panel[data-l="2"] .ll-title,
 #ll-assistant .ll-panel[data-l="2"] .ll-offer-title { font-weight: 700; letter-spacing: .02em; }
-#ll-assistant .ll-close { flex: 0 0 auto; width: 36px; height: 36px; padding: 0; font-size: 22px; line-height: 1; }
+#ll-assistant .ll-close { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; line-height: 0; }
+#ll-assistant .ll-x { display: block; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
+/* "More below" pill and a soft fade at the bottom of the conversation */
+#ll-assistant .ll-down {
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 2;
+  min-height: 36px; padding: 6px 16px; border: 2.5px solid var(--ll-ink); border-radius: var(--ll-r-pill);
+  background: var(--ll-yellow); color: var(--ll-ink); cursor: pointer;
+  font-family: var(--ll-ff-head); font-weight: 700; font-size: 14px; box-shadow: var(--ll-sh-rung); white-space: nowrap;
+}
+#ll-assistant .ll-down[hidden] { display: none; }
+#ll-assistant .ll-down:hover { transform: translate(-50%, -2px); }
+#ll-assistant .ll-down:focus-visible { box-shadow: var(--ll-ring); outline: none; }
+#ll-assistant .ll-has-below .ll-log { -webkit-mask-image: linear-gradient(to bottom, var(--ll-ink) calc(100% - 56px), transparent); mask-image: linear-gradient(to bottom, var(--ll-ink) calc(100% - 56px), transparent); }
 #ll-assistant .ll-privacy {
   display: flex; align-items: flex-start; gap: 6px; margin: 0;
   padding: 0 16px 10px; border-bottom: 1px solid var(--ll-line);
@@ -209,7 +223,9 @@
 #ll-assistant .ll-tier {
   font-family: var(--ll-ff-head); font-weight: 600; font-size: 11px; letter-spacing: .04em;
   padding: 3px 10px; border-radius: var(--ll-r-pill); border: 2px solid var(--ll-ink); color: var(--ll-ink);
+  display: inline-flex; align-items: center;
 }
+#ll-assistant .ll-tier-ico { width: 13px; height: 13px; flex: 0 0 13px; margin-right: 4px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 #ll-assistant .ll-tier[data-t="1"] { background: var(--ll-tier-free); border-color: var(--ll-ink); }
 #ll-assistant .ll-tier[data-t="2"] { background: var(--ll-yellow); }
 #ll-assistant .ll-tier[data-t="3"] { background: var(--ll-purple-1); border-color: var(--ll-purple-1); }
