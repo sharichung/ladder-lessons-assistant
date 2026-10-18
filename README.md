@@ -367,7 +367,7 @@ No border is ever coral or red, in any state. Tests check every element's comput
 **Header:** "Runs in your browser. What you type is not sent to us." / 「喺你部機運行。你打嘅內容唔會傳送畀我哋。」 Under each reply from the model: "AI suggestions can be wrong." / 「AI 建議可能有錯。」 (The keyword-mode line "Matches by keyword." is gone: the header now has the title and the lock sentence only.)
 
 **What leaves the device:**
-- There is no server. The widget's code sends nothing the teacher types, and nothing worked out from it, anywhere. The Clarity and Google Fonts notes below describe what other scripts and the browser itself can see.
+- There is no server. The widget's code sends nothing the teacher types anywhere. The only thing worked out from it is the `ll_search` categories (fixed lists, see Analytics events), sent to the page's own GA4/Clarity. The Clarity and Google Fonts notes below describe what other scripts and the browser itself can see.
 - No network request is made per question. The tests check this after every one of the fixed questions.
 - The conversation lives in page memory only and is gone on reload.
 - `localStorage` and `sessionStorage` hold nothing. (Earlier versions kept the download size as `ll-ai-bytes:<model id>`; it is no longer read or written.)
@@ -398,8 +398,10 @@ No border is ever coral or red, in any state. Tests check every element's comput
 | `ll_practice_click` | A "Start with" mode is clicked | same pattern | same pattern |
 | `ll_no_match` | An answer found no game (a count only: how often teachers find nothing) | same pattern | same pattern |
 | `ll_tell_us` | "Can't find it? Tell us" is clicked | same pattern | same pattern |
+| `ll_search` | An answer is shown for a new question (not a follow-up). Fixed categories only, see below | `gtag('event', 'll_search', {event_category: 'll_assistant', ll_skill, ll_age, ll_level, ll_exam, ll_found})` | `clarity('set', key, value)` for each of the five, then `clarity('event', 'll_search')` |
 
-- The only parameter is `event_category: "ll_assistant"`. No query text, no game id, no plan, no language.
+- For every event except `ll_search`, the only parameter is `event_category: "ll_assistant"`. No query text, no game id, no plan, no language.
+- `ll_search` (owner, 2026-10-18) adds five categories worked out from the question, each from a fixed list so no typed word can get through: `ll_skill` (a catalogue skill id or `none`), `ll_age` (`under7`, `kids`, `teens`, `adults`, `mixed`, `none`), `ll_level` (CEFR levels joined with `-`, or `none`), `ll_exam` (`yes`/`no`), `ll_found` (`yes`/`no`). This is the one exception to "nothing worked out from what is typed leaves the device": the header sentence still holds, since the words themselves are never sent.
 - **What the page needs:** a global `gtag` function (the standard GA4 gtag.js snippet defines it) and the standard Clarity snippet. The widget calls `window.gtag` and `window.clarity` at the moment of each event and sends nothing when they are missing, so a site that loads GA4 only through a Google Tag Manager container, with no gtag snippet, gets no `ll_` events in GA4. A browser check runs all 15 events through the built files on a page with the official GA4 and Clarity inline snippets: each reaches GA4's `dataLayer` as `['event', name, {event_category: 'll_assistant'}]` and Clarity's queue as `['event', name]`.
 - `ll_ai_offered` fires only on a device that can run the AI (a desktop browser with WebGPU and enough memory and storage); elsewhere `ll_fallback_shown` fires instead. Both once per page.
 - GA4 shows new event names in DebugView at once and in its standard reports within 24 to 48 hours. To filter reports by `event_category`, register it as a custom dimension in GA4 (optional; the event names alone are enough to count).

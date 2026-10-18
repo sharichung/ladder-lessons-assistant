@@ -29,8 +29,26 @@ const DEMO = `${BASE}/demo.html`;
 const EVENTS = ['ll_ai_offered', 'll_download_started', 'll_download_finished', 'll_fallback_shown', 'll_game_click',
   'll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link',
   // 2026-10-18: modes inside games and "found nothing" (counts only)
-  'll_practice_shown', 'll_practice_click', 'll_no_match', 'll_tell_us'];
-const EVENT_RE = new RegExp(EVENTS.join('|'), 'g');
+  'll_practice_shown', 'll_practice_click', 'll_no_match', 'll_tell_us',
+  // 2026-10-18: what kind of lesson was asked for, fixed categories only
+  'll_search'];
+// ll_search's categories: every value from a fixed list, never a typed word.
+const SEARCH_CATS = {
+  ll_skill: /^(none|phonics|vocab|grammar|speaking|listening|reading|writing|life|finance|group|tools)$/,
+  ll_age: /^(none|under7|kids|teens|adults|mixed)$/,
+  ll_level: /^(none|(pre-a1|a1|a2|b1|b2|c1|c2)(-(pre-a1|a1|a2|b1|b2|c1|c2))*)$/,
+  ll_exam: /^(yes|no)$/,
+  ll_found: /^(yes|no)$/,
+};
+// A gtag call is the fixed payload, or ll_search with exactly the five categories.
+function assertPayload(c) {
+  if (c[1] !== 'll_search') { assert.deepEqual(c, ['event', c[1], { event_category: 'll_assistant' }]); return; }
+  const { event_category, ...rest } = c[2];
+  assert.equal(event_category, 'll_assistant');
+  assert.deepEqual(Object.keys(rest).sort(), Object.keys(SEARCH_CATS).sort());
+  for (const k of Object.keys(SEARCH_CATS)) assert.match(rest[k], SEARCH_CATS[k], k);
+}
+const EVENT_RE = new RegExp(EVENTS.join('|') + '|ll_(?:skill|age|level|exam|found)\\W{1,8}[a-z0-9-]+', 'g');
 const MB = Math.ceil(cat.model.bytes / 1048576);
 const TOKENS = Object.fromEntries((fs.readFileSync(path.join(ROOT, 'll-tokens.css'), 'utf8').match(/--[a-z0-9-]+:[^;]+/gi) || []).map((d) => [d.split(':')[0].slice(2), d.split(':').slice(1).join(':').trim()]));
 
@@ -323,11 +341,16 @@ test('E2: analytics carry nothing from the conversation, and nothing leaves the 
   }
   const { gtag, clarity } = await calls(page);
   assert.ok(gtag.length > 0);
-  for (const c of gtag) assert.deepEqual(c, ['event', c[1], { event_category: 'll_assistant' }]);
+  for (const c of gtag) assertPayload(c);
   for (const c of gtag) assert.ok(EVENTS.includes(c[1]), c[1]);
-  for (const c of clarity) { assert.equal(c.length, 2); assert.equal(c[0], 'event'); assert.ok(EVENTS.includes(c[1]), c[1]); }
-  // Every payload already equals the fixed object; anything else would show up here.
-  const params = JSON.stringify(gtag.map((c) => c[2])).replace(/"event_category":"ll_assistant"/g, '');
+  assert.ok(gtag.some((c) => c[1] === 'll_search'), 'll_search sent');
+  for (const c of clarity) {
+    if (c[0] === 'set') { assert.equal(c.length, 3); assert.match(c[2], SEARCH_CATS[c[1]], c[1]); continue; }
+    assert.equal(c.length, 2); assert.equal(c[0], 'event'); assert.ok(EVENTS.includes(c[1]), c[1]);
+  }
+  // Every payload is the fixed object or fixed categories; a typed word would show up here.
+  const params = JSON.stringify(gtag.map((c) => c[2])).replace(/"event_category":"ll_assistant"/g, '')
+    .replace(/"ll_(?:skill|age|level|exam|found)":"[a-z0-9-]+"/g, '');
   for (const q of questions) for (const tok of queryTokens(q.text)) assert.ok(!containsToken(params, tok), `${q.id}: "${tok}" in an analytics payload`);
   assert.equal(page.url(), startUrl, 'URL unchanged');
   const storage = await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }));
@@ -1426,7 +1449,7 @@ test('Send this plan, no host form: email via the mail app, copy link, share on 
   assert.match(extra[0], /^mailto:\?subject=My%20Ladder%20Lessons%20lesson%20plan&body=/);
   const ev = await eventNames(page);
   for (const e of ['ll_plan_send_open', 'll_plan_send_copy', 'll_plan_send_email']) assert.ok(ev.includes(e), e);
-  for (const c of (await calls(page)).gtag) assert.deepEqual(c, ['event', c[1], { event_category: 'll_assistant' }]);
+  for (const c of (await calls(page)).gtag) assertPayload(c);
   await shot(page, 'send-panel-fallback-375');
   assert.deepEqual(errors, []);
   await context.close();

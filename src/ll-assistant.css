@@ -261,6 +261,8 @@
    line, -o "Other games that fit", -pb/-p/-pl/-pn/-pm parts box, list, label, name, minutes.
    ll-sh "Send this plan": -b button, -p panel, -r button row, -n privacy note, -d "Sent", -m the host's form. */
 #ll-assistant .ll-pl { display: flex; flex-direction: column; }
+/* "Found 5 games": one bold line under the plan heading */
+#ll-assistant .ll-pl-n { margin: 0 0 6px; font-family: var(--ll-ff-head); font-size: 14px; font-weight: 700; color: var(--ll-ink); }
 #ll-assistant .ll-pl-h { margin: 0 0 4px; font-family: var(--ll-ff-head); font-size: 17px; font-weight: 600; line-height: 1.3; color: var(--ll-ink); }
 #ll-assistant .ll-panel[data-l="2"] .ll-pl-h,
 #ll-assistant .ll-panel[data-l="2"] .ll-pl-o,
@@ -304,6 +306,17 @@
   min-height: calc(1.4em + 22px); max-height: calc(1.4em * 4 + 22px); /* one line, up to four */
 }
 #ll-assistant .ll-input:focus, #ll-assistant .ll-input:focus-visible { outline: none; box-shadow: none; }
+
+/* Phones: the panel fills the screen (a 390px box left too little room at 375px). */
+@media (max-width: 520px) {
+  #ll-assistant.ll-pos-right .ll-panel, #ll-assistant.ll-pos-left .ll-panel {
+    left: auto; right: 0; bottom: 0;
+    width: 100vw; height: 100vh; height: 100dvh;
+    border: 0; border-radius: 0; box-shadow: none;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  #ll-assistant.ll-pos-left .ll-panel { right: auto; left: 0; }
+}
 
 /* 320px phones: room for the whole placeholder on one line (B4) */
 @media (max-width: 360px) {

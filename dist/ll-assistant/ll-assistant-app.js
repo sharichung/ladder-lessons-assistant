@@ -75,6 +75,8 @@
       retry: 'Try again',
       // Lesson plan (Feature 1)
       planTitle: 'Your lesson plan',
+      found: 'Found {n} games',
+      found1: 'Found 1 game',
       planSaved: 'Your saved lesson plan',
       roles: { warmup: 'Warm-up', main: 'Main activity', wrapup: 'Wrap-up' },
       min: '{n} min',
@@ -159,6 +161,8 @@
       loadFail: '遊戲清單載入唔到。',
       retry: '再試',
       planTitle: '你嘅課堂安排',
+      found: '找到 {n} 個遊戲',
+      found1: '找到 1 個遊戲',
       planSaved: '你儲存咗嘅課堂安排',
       roles: { warmup: '暖身', main: '主要活動', wrapup: '總結' },
       min: '{n} 分鐘',
@@ -2021,6 +2025,37 @@
     } catch (e) { /* analytics must never break the widget */ }
   }
 
+  // What kind of lesson was asked for, as fixed categories only (owner, 2026-10-18):
+  // skill, age band, CEFR level, exam yes/no, and whether a game was found.
+  // Never the words typed, never a game id. Every value comes from a fixed list.
+  var SEARCH_SKILLS = ['phonics', 'vocab', 'grammar', 'speaking', 'listening', 'reading', 'writing', 'life', 'finance', 'group', 'tools'];
+  function searchCategories(res) {
+    var q = (res && res.q) || {};
+    var skill = (q.skills || []).filter(function (x) { return SEARCH_SKILLS.indexOf(x) >= 0; })[0] || 'none';
+    var a = q.age;
+    var age = !a ? 'none' : a.max <= 6 ? 'under7' : a.max <= 12 ? 'kids' : a.max <= 17 ? 'teens' : a.min >= 18 ? 'adults' : 'mixed';
+    if (!a && q.adultSignal) age = 'adults';
+    var level = (q.levels || []).filter(function (l) { return /^(pre-?a1|a1|a2|b1|b2|c1|c2)$/i.test(l); });
+    return {
+      ll_skill: skill,
+      ll_age: age,
+      ll_level: level.length ? level.join('-').toLowerCase() : 'none',
+      ll_exam: q.examAsked ? 'yes' : 'no',
+      ll_found: res.kind === 'picks' ? 'yes' : 'no',
+    };
+  }
+  function trackSearch(res) {
+    if (!res || ['picks', 'none', 'invalid', 'ask'].indexOf(res.kind) < 0) return;
+    var c = searchCategories(res);
+    try {
+      if (typeof window.gtag === 'function') window.gtag('event', 'll_search', Object.assign({ event_category: 'll_assistant' }, c));
+      if (typeof window.clarity === 'function') {
+        Object.keys(c).forEach(function (k) { window.clarity('set', k, c[k]); });
+        window.clarity('event', 'll_search');
+      }
+    } catch (e) { /* analytics must never break the widget */ }
+  }
+
   function clarityCall(cmd) {
     try { if (typeof window.clarity === 'function') window.clarity(cmd); } catch (e) { /* ignore */ }
   }
@@ -2467,6 +2502,7 @@
       var turn = { who: 'bot', res: res, text: text };
       // The lesson plan is built once per answer, so a redraw shows the same plan.
       if (res.kind === 'picks') { turn.plan = buildPlan(res, S.cat); track('ll_plan_shown'); }
+      if (!(follow && follow.followUp)) trackSearch(res);
       // A count only, never the words: how often a teacher found nothing (owner, 2026-10-18).
       if (res.kind === 'invalid' || res.kind === 'none' || (res.kind === 'ask' && res.noMore && !res.choices.length)) track('ll_no_match');
       S.turns.push(turn);
@@ -2658,6 +2694,9 @@
     var L = t(), lang = uiLang();
     var wrap = el('div', { 'class': 'll-pl' });
     wrap.appendChild(el('h3', { 'class': 'll-pl-h', text: saved ? L.planSaved : L.planTitle }));
+    // How many games in all (plan and "other games"), so the teacher knows the list goes on.
+    var nGames = planGameCount(plan);
+    if (nGames) wrap.appendChild(el('p', { 'class': 'll-pl-n', text: nGames === 1 ? L.found1 : fmt(L.found, { n: nGames }) }));
     planSummary(plan, S.cat, lang).forEach(function (line) { wrap.appendChild(el('p', { 'class': 'll-small ll-pl-s', text: line })); });
     var noted = false;
     // 6A: the kid-themed note is a small line right before the first kid-themed step.
@@ -2691,6 +2730,13 @@
     }
     wrap.appendChild(sendBlock(plan));
     return wrap;
+  }
+
+  function planGameCount(plan) {
+    var items = (plan.kind === 'single' ? [plan.item] : plan.steps.map(function (st) { return st.item; })).concat(plan.others || []);
+    var seen = {};
+    items.forEach(function (it) { if (it) itemIds(it).forEach(function (id) { seen[id] = true; }); });
+    return Object.keys(seen).length;
   }
 
   // ---------- Feature 2: send the plan to a laptop ----------
