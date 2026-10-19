@@ -231,7 +231,12 @@ const appHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROO
 const shell = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.js'), 'utf8');
 const APP_LINE = "var APP_FILE = 'll-assistant-app.js';";
 if (shell.split(APP_LINE).length !== 2) { console.error('Build stopped: ll-assistant.js must name the finder exactly once as: ' + APP_LINE); process.exit(1); }
-fs.writeFileSync(path.join(OUT, 'll-assistant.js'), shell.replace(APP_LINE, `var APP_FILE = 'll-assistant-app.js?v=${appHash}';`));
+// The stylesheet gets its own hash too (2026-10-19): a cached old stylesheet with a
+// new finder drew the send options and the chevron unstyled.
+const cssHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.css'))).digest('hex').slice(0, 10);
+const CSS_LINE = "var CSS_FILE = 'll-assistant.css';";
+if (shell.split(CSS_LINE).length !== 2) { console.error('Build stopped: ll-assistant.js must name the stylesheet exactly once as: ' + CSS_LINE); process.exit(1); }
+fs.writeFileSync(path.join(OUT, 'll-assistant.js'), shell.replace(APP_LINE, `var APP_FILE = 'll-assistant-app.js?v=${appHash}';`).replace(CSS_LINE, `var CSS_FILE = 'll-assistant.css?v=${cssHash}';`));
 fs.copyFileSync(webllmSrc, path.join(OUT, 'vendor', 'web-llm.js'));
 fs.copyFileSync(path.join(ROOT, 'node_modules', '@mlc-ai', 'web-llm', 'LICENSE'), path.join(OUT, 'vendor', 'web-llm.LICENSE.txt'));
 
