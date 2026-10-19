@@ -29,7 +29,8 @@
 
   // scripts/build.mjs adds a version to this name in dist/, so a cached copy of
   // one file is never paired with a newer copy of the other.
-  var APP_FILE = 'll-assistant-app.js?v=3270b7ec77';
+  var APP_FILE = 'll-assistant-app.js?v=336f102d62';
+  var CSS_FILE = 'll-assistant.css?v=a5bb0631b2';
   var LAUNCHER = { en: 'Find a game', zh: '幫我揀遊戲' };
   var RETRY = { en: 'Try again', zh: '再試一次' };
 
@@ -135,7 +136,7 @@
 
     var show = function () { root.style.visibility = ''; };
     if (!document.querySelector('link[data-ll-assistant]')) {
-      var link = el('link', { rel: 'stylesheet', href: S.base + 'll-assistant.css', 'data-ll-assistant': true });
+      var link = el('link', { rel: 'stylesheet', href: S.base + CSS_FILE, 'data-ll-assistant': true });
       link.onload = show; link.onerror = show;
       document.head.appendChild(link);
     } else show();

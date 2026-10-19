@@ -424,7 +424,7 @@ test('plan summary counts from the catalogue, in English and Chinese', () => {
   assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run step 1 today, free.', '2 of 3 steps are in the Teacher plan.']);
   assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['第 1 步今日就玩得，免費。', '3 步入面有 2 步喺老師版。']);
   plan = core.buildPlan(fakeAnswer([p1, p2, FREE0], [9, 5, 7], null), cat);
-  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run step 1 today, free.', '2 of 3 steps are in the Parent plan.']);
+  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run step 1 today, free.', '2 of 3 steps are in the Parent and Teacher plans.']);
   plan = core.buildPlan(fakeAnswer([p1, t1], [5, 9], null), cat);
   assert.deepEqual(core.planSummary(plan, cat, 'en'), ['Both steps are in the Teacher plan.']);
   assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['2 步全部喺老師版。']);
@@ -435,7 +435,7 @@ test('plan summary counts from the catalogue, in English and Chinese', () => {
   assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['第 1、2 步今日就玩得，免費。']);
   // One paid step of three.
   plan = core.buildPlan(fakeAnswer([frees[0], p1, frees[1]], [9, 5, 7], null), cat);
-  assert.equal(core.planSummary(plan, cat, 'en')[1], '1 of 3 steps is in the Parent plan.');
+  assert.equal(core.planSummary(plan, cat, 'en')[1], '1 of 3 steps is in the Parent and Teacher plans.');
   // Single-game plans.
   plan = core.buildPlan(fakeAnswer(['speaking_LadderTalk'], [9], null), cat);
   assert.deepEqual(core.planSummary(plan, cat, 'en'), ['This game is in the Teacher plan.']);
@@ -757,7 +757,9 @@ test('mailto: no recipient, the subject, the link and one line per step with the
 test('analytics: the plan events are fixed names in the allowlist', () => {
   const { internals } = require(path.join(ROOT, 'src', 'll-assistant-app.js'));
   for (const e of ['ll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link']) assert.ok(internals.EVENTS.includes(e), e);
-  assert.equal(internals.EVENTS.length, 11);
+  // 2026-10-18: four counts for modes inside games and "found nothing"; never the words.
+  for (const e of ['ll_practice_shown', 'll_practice_click', 'll_no_match', 'll_tell_us']) assert.ok(internals.EVENTS.includes(e), e);
+  assert.equal(internals.EVENTS.length, 15);
 });
 
 // ---------- AI mode post-processing with scripted models ----------
@@ -972,8 +974,8 @@ test('privacy lines and plan labels are exactly as approved', () => {
   assert.equal(core.T.zh.placeholder, '年齡、程度、技能');
   assert.equal(core.T.en.inputLabel, 'Describe your student');
   assert.equal(core.T.zh.inputLabel, '描述你嘅學生');
-  assert.deepEqual(core.T.en.tier, { free: 'Free', parent: 'Parent', teacher: 'Teacher' });
-  assert.deepEqual(core.T.zh.tier, { free: '免費', parent: '家長版', teacher: '老師版' });
+  assert.deepEqual(core.T.en.tier, { free: 'Free', parent: 'Parent + Teacher', teacher: 'Teacher' });
+  assert.deepEqual(core.T.zh.tier, { free: '免費', parent: '家長版＋老師版', teacher: '老師版' });
 });
 
 test('skill choice labels use the site\'s skill tag words (口說, not 口語)', () => {
@@ -1025,7 +1027,8 @@ test('plan label CSS copies the library page .tier rules', () => {
   assert.match(css, /\.ll-tier \{[^}]*font-weight: 600; font-size: 11px; letter-spacing: \.04em;[^}]*padding: 3px 10px;[^}]*border: 2px solid var\(--ll-ink\); color: var\(--ll-ink\)/);
   assert.match(css, /\.ll-tier\[data-t="1"\] \{ background: var\(--ll-tier-free\)/);
   assert.match(css, /\.ll-tier\[data-t="2"\] \{ background: var\(--ll-yellow\)/);
-  assert.match(css, /\.ll-tier\[data-t="3"\] \{ background: var\(--ll-purple-1\); border-color: var\(--ll-purple-1\)/);
+  // 2026-10-19: Teacher gets the ink border like Free and Parent (library .tier.teacher changed with it)
+  assert.match(css, /\.ll-tier\[data-t="3"\] \{ background: var\(--ll-purple-1\); border-color: var\(--ll-ink\)/);
   assert.match(css, /\.ll-cta \{[^}]*min-height: 44px;[^}]*font-weight: 700; font-size: 16px;[^}]*border: 3px solid var\(--ll-ink\);[^}]*background: var\(--ll-grad-cta\); color: var\(--ll-ink\)/);
   // B5: disabled as on the site
   assert.match(css, /\.ll-cta:disabled \{ background: var\(--ll-line\); color: var\(--ll-ink-soft\); border-color: var\(--ll-muted\); box-shadow: none;/);
@@ -1060,4 +1063,63 @@ test('colour budget: coral only on the enabled primary button, no coral or red b
   // A5: focus uses :focus-visible and the yellow ring
   assert.doesNotMatch(css.replace(/\.ll-input:focus,|button:focus \{ outline: none; \}/g, ''), /:focus(?![-\w])/);
   assert.match(css, /--ll-ring: 0 0 0 4px var\(--ll-yellow\)/);
+});
+
+// ---------- modes inside a game (owner, 2026-10-18) ----------
+
+test('practices: every mode row is merged onto a real game with a plain ?key=value link', () => {
+  const rows = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'practices.json'), 'utf8'));
+  const merged = compactRaw.games.reduce((n, g) => n + (g.pr ? g.pr.length : 0), 0);
+  assert.equal(merged, rows.length);
+  for (const g of compactRaw.games) for (const r of g.pr || []) {
+    assert.match(r.q, /^\?[a-z]+=[\w,.-]+(&[a-z]+=[\w,.-]+)*$/i, `${g.id} ${r.m}`);
+    assert.ok(r.m, `${g.id} has a mode name`);
+  }
+});
+
+test('practices: the teacher\'s words pick the matching mode on a picked card; no match shows nothing', () => {
+  const byTitle = (t) => cat.games.find((g) => g.title === t);
+  const pick = (title, text) => { const r = core.practiceFor(byTitle(title), text); return r ? r.m + (r.s ? ' · ' + r.s : '') : null; };
+  assert.equal(pick('Question Master', 'guess the question word from the answer'), 'Guess it · Question words');
+  assert.equal(pick('Question Master', '前文後理 對話'), 'Chat it · Question words');
+  assert.equal(pick('Tense Studio', 'adverbs of frequency for P4'), 'Frequency Chart');
+  assert.equal(pick('Tense Studio', 'past continuous practice'), 'Fill in the Blanks · Past Continuous');
+  assert.equal(pick('Advice Studio', 'he she we they should'), 'Who should?');
+  assert.equal(pick('Determiner Studio', 'some and any'), 'Choose · some / any');
+  assert.equal(pick('Ladder Festivals', 'halloween do and don\'t should'), 'Do & Don’t · Halloween');
+  assert.equal(pick('Question Master', 'age 8 student, 30 min'), null);
+  assert.equal(pick('Question Master', 'question master'), null, 'the game\'s own title is not a mode');
+  assert.equal(pick('Ladder Phonics', 'short a sounds'), null, 'a game without modes shows nothing');
+});
+
+test('practices: a strong mode match finds a game the keywords miss; one stray word never does', () => {
+  const run = (text) => { const r = core.recommendRules(cat, text); return r.kind === 'picks' ? r.ids[0] : r.kind; };
+  assert.equal(run('adverbs of frequency, age 9'), 'grammar_TenseStudio');
+  assert.equal(run('a few a little a lot of'), 'grammar_DeterminerStudio');
+  assert.equal(run('some any'), 'grammar_DeterminerStudio');
+  assert.equal(run('who should he she we they'), 'grammar_AdviceStudio');
+  for (const off of ['how do I fix my car', 'how do i cook rice', 'what time is it', 'how much is it', 'I want to warm up at the gym', 'should i buy a car']) {
+    assert.notEqual(core.recommendRules(cat, off).kind, 'picks', off);
+  }
+});
+
+// 2026-10-19 (owner's decision A): a visitor who cannot open Main gets a game
+// they can open as Main, when it matches the topic and scores at least 60%.
+test('lesson plan: Main is a game the visitor can open now (canOpen)', () => {
+  const ids = (x) => (Array.isArray(x) ? x : (x.ids || [x.id]));
+  const mainId = (p) => (p.kind === 'single' ? ids(p.item)[0] : ids(p.steps.filter((s) => s.role === 'main' || s.role === null)[0].item || p.steps[0].ids)[0]);
+  const freeOnly = (t) => t === 'free';
+  const all = () => true;
+  const r1 = core.recommendRules(cat, 'Age 7, beginner, phonics, 30 min');
+  assert.equal(mainId(core.buildPlan(r1, cat, { canOpen: freeOnly })), 'phonics_LadderPhonics');
+  assert.equal(mainId(core.buildPlan(r1, cat, { canOpen: all })), mainId(core.buildPlan(r1, cat)), 'members: Main as before');
+  const r2 = core.recommendRules(cat, 'Adult, B2, IELTS speaking, 60 min');
+  const p2 = core.buildPlan(r2, cat, { canOpen: freeOnly });
+  assert.equal(mainId(p2), 'speaking_QuickFireFlashcards');
+  assert.equal(p2.steps.length, 1, 'a swapped game with no parts is the lesson on its own');
+  assert.ok(p2.others.map((o) => ids(o)[0]).includes('speaking_IeltsSpeakingRoom'), 'the better locked game is under Other games that fit');
+  const r3 = core.recommendRules(cat, 'kids 10 past tense 45 min');
+  assert.equal(mainId(core.buildPlan(r3, cat, { canOpen: freeOnly })), mainId(core.buildPlan(r3, cat)), 'no free game fits: unchanged');
+  const r4 = core.recommendRules(cat, 'Halloween speaking');
+  assert.equal(mainId(core.buildPlan(r4, cat, { canOpen: freeOnly })), mainId(core.buildPlan(r4, cat)), 'a festival keeps the festival rules');
 });

@@ -147,6 +147,25 @@ if (fs.existsSync(csvPath)) {
   }
 }
 
+// ---------- data/practices.json (modes inside the games) ----------
+// Exported from the site repo (sharienglish: node scripts/ll_practices.mjs →
+// games/_brand/ll-practices.json). One row per mode or set inside a game, with a
+// deep link query (?mode=guess&set=wh). The widget never ranks games by it: it
+// only shows "Start with: Guess it · Question words" on a game card that is
+// already picked, when the teacher's words match one of its modes.
+const practices = {};
+const prPath = path.join(ROOT, 'data', 'practices.json');
+if (fs.existsSync(prPath)) {
+  const byPath = Object.fromEntries(source.games.map(g => [g.path.replace(/^\//, ''), g.id]));
+  for (const r of JSON.parse(fs.readFileSync(prPath, 'utf8'))) {
+    const id = byPath[String(r.g || '').replace(/\.html$/, '')];
+    if (!id) { problems.push(`practices.json: game "${r.g}" is not in catalogue.json`); continue; }
+    if (!/^\?[a-z]+=[\w,.-]+(&[a-z]+=[\w,.-]+)*$/i.test(r.q || '')) problems.push(`practices.json ${r.g}: link "${r.q}" is not a plain ?key=value query`);
+    if (!r.m) problems.push(`practices.json ${r.g}: a row has no mode name`);
+    (practices[id] = practices[id] || []).push({ m: r.m, s: r.s || '', q: r.q, k: r.k || '' });
+  }
+}
+
 // ---------- WebLLM model record ----------
 const webllmSrc = path.join(ROOT, 'node_modules', '@mlc-ai', 'web-llm', 'lib', 'index.js');
 if (!fs.existsSync(webllmSrc)) problems.push('node_modules/@mlc-ai/web-llm is missing. Run: npm install');
@@ -195,6 +214,7 @@ const compact = {
     if (a.parts) out.parts = a.parts;
     if (e.how_en) out.how_en = e.how_en;
     if (e.how_zh) out.how_zh = e.how_zh;
+    if (practices[g.id]) out.pr = practices[g.id];
     return out;
   }),
 };
@@ -211,7 +231,12 @@ const appHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROO
 const shell = fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.js'), 'utf8');
 const APP_LINE = "var APP_FILE = 'll-assistant-app.js';";
 if (shell.split(APP_LINE).length !== 2) { console.error('Build stopped: ll-assistant.js must name the finder exactly once as: ' + APP_LINE); process.exit(1); }
-fs.writeFileSync(path.join(OUT, 'll-assistant.js'), shell.replace(APP_LINE, `var APP_FILE = 'll-assistant-app.js?v=${appHash}';`));
+// The stylesheet gets its own hash too (2026-10-19): a cached old stylesheet with a
+// new finder drew the send options and the chevron unstyled.
+const cssHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'src', 'll-assistant.css'))).digest('hex').slice(0, 10);
+const CSS_LINE = "var CSS_FILE = 'll-assistant.css';";
+if (shell.split(CSS_LINE).length !== 2) { console.error('Build stopped: ll-assistant.js must name the stylesheet exactly once as: ' + CSS_LINE); process.exit(1); }
+fs.writeFileSync(path.join(OUT, 'll-assistant.js'), shell.replace(APP_LINE, `var APP_FILE = 'll-assistant-app.js?v=${appHash}';`).replace(CSS_LINE, `var CSS_FILE = 'll-assistant.css?v=${cssHash}';`));
 fs.copyFileSync(webllmSrc, path.join(OUT, 'vendor', 'web-llm.js'));
 fs.copyFileSync(path.join(ROOT, 'node_modules', '@mlc-ai', 'web-llm', 'LICENSE'), path.join(OUT, 'vendor', 'web-llm.LICENSE.txt'));
 
@@ -219,6 +244,7 @@ const n = compact.games.length;
 const count = k => compact.games.filter(g => g[k]).length;
 const kb = f => (fs.statSync(path.join(OUT, f)).size / 1024).toFixed(1) + ' KB (' + (zlib.gzipSync(fs.readFileSync(path.join(OUT, f)), { level: 9 }).length / 1024).toFixed(1) + ' KB gzip)';
 console.log(`Built dist/ll-assistant/ from ${n} games`);
+console.log(`  practices: ${Object.values(practices).reduce((n, l) => n + l.length, 0)} modes in ${Object.keys(practices).length} games`);
 console.log(`  from ages.csv: age_min ${compact.games.filter(g => g.age_min != null).length}/${n}, levels ${compact.games.filter(g => g.level_min || g.level_max).length}/${n}, kid_theme ${count('kid')}/${n}, parts ${count('parts')}/${n}; how-to-run: ${count('how_en')}/${n}`);
 console.log(`  page load: ll-assistant.js ${kb('ll-assistant.js')}, ll-assistant.css ${kb('ll-assistant.css')}`);
 console.log(`  first open: ll-assistant-app.js ${kb('ll-assistant-app.js')}, catalogue.compact.json ${kb('catalogue.compact.json')}`);

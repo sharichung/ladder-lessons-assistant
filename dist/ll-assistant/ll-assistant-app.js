@@ -24,6 +24,7 @@
       launcher: 'Find a game',
       title: 'Lesson game finder',
       close: 'Close',
+      below: 'More below',
       privacy: 'Runs in your browser. What you type is not sent to us.',
       modeAI: 'AI suggestions can be wrong.',
       more: 'more',
@@ -60,22 +61,28 @@
       tryThese: 'Try one of these:',
       kidNote: 'No {skill} game is designed for teens or adults yet. These are kid-themed:',
       skills: { speaking: 'Speaking', writing: 'Writing', grammar: 'Grammar', vocab: 'Vocabulary', phonics: 'Phonics', listening: 'Listening' },
-      tier: { free: 'Free', parent: 'Parent', teacher: 'Teacher' },
+      tier: { free: 'Free', parent: 'Parent + Teacher', teacher: 'Teacher' },
       mode: { led: 'Teacher-led', solo: 'Student solo' },
       level: 'Level {l}',
       pickLevel: 'Pick a level:',
       kid: 'Kid-themed',
       how: 'How to run it:',
+      startWith: 'Start with:',
+      tellUs: 'Can’t find it? Tell us what you want to practise',
+      tellUsSubject: 'Ladder Lessons: a game I could not find',
+      tellUsBody: 'I was looking for:',
       loadFail: 'The game list did not load.',
       retry: 'Try again',
       // Lesson plan (Feature 1)
       planTitle: 'Your lesson plan',
+      found: 'Found {n} games',
+      found1: 'Found 1 game',
       planSaved: 'Your saved lesson plan',
       roles: { warmup: 'Warm-up', main: 'Main activity', wrapup: 'Wrap-up' },
       min: '{n} min',
       timing: 'Suggested timing',
       steps: 'Steps',
-      planName: { parent: 'Parent plan', teacher: 'Teacher plan' },
+      planName: { parent: 'Parent and Teacher plans', teacher: 'Teacher plan' },
       freeOne: 'You can run step {list} today, free.',
       freeMany: 'You can run steps {list} today, free.',
       listAnd: ' and ',
@@ -94,6 +101,9 @@
       sendCopy: 'Copy link',
       sendCopied: 'Copied',
       sendShare: 'Share',
+      sendEmailHint: 'Opens your mail app with the link filled in',
+      sendCopyHint: 'Paste it into WhatsApp, notes or a browser',
+      sendShareHint: 'Send it with another app on this phone',
       sendOrCopy: 'or copy the link',
       sendHostNote: 'This sends your email address and this list of games to Ladder Lessons. Nothing you typed is included.',
       sendMailNote: 'This uses your own mail app. Nothing is sent to Ladder Lessons.',
@@ -104,6 +114,7 @@
       launcher: '幫我揀遊戲',
       title: '課堂遊戲小助手',
       close: '關閉',
+      below: '下面還有',
       privacy: '喺你部機運行。你打嘅內容唔會傳送畀我哋。',
       modeAI: 'AI 建議可能有錯。',
       more: '更多',
@@ -140,21 +151,27 @@
       tryThese: '可以試吓：',
       kidNote: '暫時未有為青少年或成人而設嘅{skill}遊戲，以下係兒童主題：',
       skills: { speaking: '口說', writing: '寫作', grammar: '文法', vocab: '詞彙', phonics: '拼讀', listening: '聽力' },
-      tier: { free: '免費', parent: '家長版', teacher: '老師版' },
+      tier: { free: '免費', parent: '家長版＋老師版', teacher: '老師版' },
       mode: { led: '老師帶領', solo: '學生自己玩' },
       level: '程度 {l}',
       pickLevel: '揀程度：',
       kid: '兒童主題',
       how: '課堂用法：',
+      startWith: '由呢度開始：',
+      tellUs: '搵唔到？話我知你想練乜',
+      tellUsSubject: 'Ladder Lessons：搵唔到嘅練習',
+      tellUsBody: '我想搵：',
       loadFail: '遊戲清單載入唔到。',
       retry: '再試',
       planTitle: '你嘅課堂安排',
+      found: '找到 {n} 個遊戲',
+      found1: '找到 1 個遊戲',
       planSaved: '你儲存咗嘅課堂安排',
       roles: { warmup: '暖身', main: '主要活動', wrapup: '總結' },
       min: '{n} 分鐘',
       timing: '建議時間',
       steps: '步驟',
-      planName: { parent: '家長版', teacher: '老師版' },
+      planName: { parent: '家長版同老師版', teacher: '老師版' },
       freeOne: '第 {list} 步今日就玩得，免費。',
       freeMany: '第 {list} 步今日就玩得，免費。',
       listAnd: '、',
@@ -172,6 +189,9 @@
       sendCopy: '複製連結',
       sendCopied: '已複製',
       sendShare: '分享',
+      sendEmailHint: '開你部機嘅 email app，連結已經填好',
+      sendCopyHint: '貼去 WhatsApp、筆記或者瀏覽器',
+      sendShareHint: '用呢部手機嘅其他 app 傳送',
       sendOrCopy: '或者複製連結',
       sendHostNote: '呢度會將你嘅 email 同呢張遊戲清單傳送畀 Ladder Lessons，唔包括你打過嘅字。',
       sendMailNote: '呢度用你自己嘅 email app，唔會有嘢傳送畀 Ladder Lessons。',
@@ -1096,9 +1116,21 @@
     // One keyword match is enough when everything else in the message is
     // teaching or filler words ("English for work", 自我介紹). A message with
     // any other word ("I work at a bank") still needs a stronger match.
-    if (!teachingRequest(q)) return withCtx(result(q, { kind: 'none' }), ctx);
+    var byModes = function () {
+      var hits = modeMatches(ctx, text);
+      if (!hits.length) return null;
+      hits.forEach(function (h) { if (!ctx.scoreOf[h.id]) ctx.scoreOf[h.id] = { g: cat.byId[h.id], s: h.s, kw: h.s }; });
+      ctx.rel = hits.map(function (h) { return ctx.scoreOf[h.id]; });
+      ctx.onlyRel = true;
+      var f = finalize(ctx, hits.map(function (h) { return h.id; }));
+      if (!f.items.length) return null;
+      ctx.lead = [itemIds(f.items[0])[0]];
+      ctx.kwIds = f.items.map(function (it) { return itemIds(it)[0]; });
+      return withCtx(result(q, { kind: 'picks', items: f.items, kidNote: f.kidNote, narrow: !q.hasAge && !q.hasLevel, byModes: true }), ctx);
+    };
+    if (!teachingRequest(q)) return byModes() || withCtx(result(q, { kind: 'none' }), ctx);
     var lowBar = !q.skills.length && ctx.top < MIN_SCORE && onlyKeywords(ctx, q);
-    if (!q.skills.length && ctx.top < MIN_SCORE && !lowBar) return withCtx(result(q, { kind: 'none' }), ctx);
+    if (!q.skills.length && ctx.top < MIN_SCORE && !lowBar) return byModes() || withCtx(result(q, { kind: 'none' }), ctx);
     if (lowBar) {
       ctx.rel = ctx.scored.filter(function (x) { return x.kw > 0 && x.s >= Math.max(3, ctx.top * 0.5); });
       ctx.onlyRel = true;
@@ -1808,7 +1840,13 @@
   // question. With 2 or more parts, Main is the whole lesson (single-game plan,
   // 5A). Otherwise the warm-up is a free game if there is one, else the next
   // best, and the wrap-up is the game left.
-  function buildPlan(res, cat) {
+  // opts.canOpen(tier) (2026-10-18, owner's decision A): which plans this
+  // visitor can open now. When given and Main is a game they cannot open, a
+  // game they can open becomes Main if it would have gone first by the free-first
+  // rule: it matches the topic and scores at least 60% of Main. Without opts
+  // (tests, plan links) Main is chosen as before. A festival named in the
+  // question keeps the festival rules.
+  function buildPlan(res, cat, opts) {
     if (!res || res.kind !== 'picks' || !res.items || !res.items.length) return null;
     var ctx = res.ctx, q = res.q || {};
     var score = function (it) {
@@ -1831,8 +1869,23 @@
       (festSkill && ranked.filter(function (x) { return fest(x) && !(older && kid(x)); })[0]) ||
       ranked.filter(function (x) { return !(older && kid(x)) && !(noFest && fest(x)); })[0] ||
       (older && ranked.filter(function (x) { return !kid(x); })[0]) || ranked[0];
+    var canOpen = opts && typeof opts.canOpen === 'function' ? opts.canOpen : null, switched = false;
+    if (canOpen && !festPick && !canOpen(itemTier(cat, main.it))) {
+      var openNow = ranked.filter(function (x) {
+        if (x === main || !canOpen(itemTier(cat, x.it))) return false;
+        if ((older && kid(x)) || (noFest && fest(x))) return false;
+        var topic = itemIds(x.it).some(function (id) { var sc = ctx && ctx.scoreOf[id]; return sc && sc.kw > 0; });
+        return topic && x.s >= main.s * 0.6;
+      })[0];
+      if (openNow) { main = openNow; switched = true; }
+    }
     var rest = ranked.filter(function (x) { return x !== main; });
     var its = function (list) { return list.map(function (x) { return x.it; }); };
+    // Main was swapped for a game the visitor can open and it has no parts: it
+    // is the lesson on its own, and the better-scoring locked games are under
+    // "Other games that fit", never wrapped around it as warm-up or wrap-up.
+    if (switched && !partsOf(cat, main.it)) return assemblePlan(cat, 'multi', [main.it], minutes, kidNote,
+      its(noFest ? rest.filter(function (x) { return !fest(x); }).concat(rest.filter(fest)) : rest));
     if (partsOf(cat, main.it)) {
       // Other games that fit (1.11): free first, then by score.
       return assemblePlan(cat, 'single', [main.it].concat(its(rest.slice().sort(function (a, b) {
@@ -1977,6 +2030,7 @@
     CONCEPTS: CONCEPTS, SKILL_WORDS: SKILL_WORDS, conceptOf: conceptOf, facetsOf: facetsOf,
     buildPlan: buildPlan, assemblePlan: assemblePlan, planSummary: planSummary, partSteps: partSteps,
     partMinutes: partMinutes, multiMinutes: multiMinutes, planCode: planCode, planLink: planLink, parsePlanCode: parsePlanCode, mailtoLink: mailtoLink,
+    practiceFor: function (g, text) { return practiceFor(g, text); },
   };
 
   // ======================================================================
@@ -1985,7 +2039,8 @@
   // ======================================================================
 
   var EVENTS = ['ll_ai_offered', 'll_download_started', 'll_download_finished', 'll_fallback_shown', 'll_game_click',
-    'll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link'];
+    'll_plan_shown', 'll_plan_send_open', 'll_plan_send_email', 'll_plan_send_copy', 'll_plan_send_share', 'll_plan_opened_from_link',
+    'll_practice_shown', 'll_practice_click', 'll_no_match', 'll_tell_us'];
   var sent = {};
   function track(name, once) {
     if (EVENTS.indexOf(name) < 0) return;
@@ -1994,6 +2049,37 @@
     try {
       if (typeof window.gtag === 'function') window.gtag('event', name, { event_category: 'll_assistant' });
       if (typeof window.clarity === 'function') window.clarity('event', name);
+    } catch (e) { /* analytics must never break the widget */ }
+  }
+
+  // What kind of lesson was asked for, as fixed categories only (owner, 2026-10-18):
+  // skill, age band, CEFR level, exam yes/no, and whether a game was found.
+  // Never the words typed, never a game id. Every value comes from a fixed list.
+  var SEARCH_SKILLS = ['phonics', 'vocab', 'grammar', 'speaking', 'listening', 'reading', 'writing', 'life', 'finance', 'group', 'tools'];
+  function searchCategories(res) {
+    var q = (res && res.q) || {};
+    var skill = (q.skills || []).filter(function (x) { return SEARCH_SKILLS.indexOf(x) >= 0; })[0] || 'none';
+    var a = q.age;
+    var age = !a ? 'none' : a.max <= 6 ? 'under7' : a.max <= 12 ? 'kids' : a.max <= 17 ? 'teens' : a.min >= 18 ? 'adults' : 'mixed';
+    if (!a && q.adultSignal) age = 'adults';
+    var level = (q.levels || []).filter(function (l) { return /^(pre-?a1|a1|a2|b1|b2|c1|c2)$/i.test(l); });
+    return {
+      ll_skill: skill,
+      ll_age: age,
+      ll_level: level.length ? level.join('-').toLowerCase() : 'none',
+      ll_exam: q.examAsked ? 'yes' : 'no',
+      ll_found: res.kind === 'picks' ? 'yes' : 'no',
+    };
+  }
+  function trackSearch(res) {
+    if (!res || ['picks', 'none', 'invalid', 'ask'].indexOf(res.kind) < 0) return;
+    var c = searchCategories(res);
+    try {
+      if (typeof window.gtag === 'function') window.gtag('event', 'll_search', Object.assign({ event_category: 'll_assistant' }, c));
+      if (typeof window.clarity === 'function') {
+        Object.keys(c).forEach(function (k) { window.clarity('set', k, c[k]); });
+        window.clarity('event', 'll_search');
+      }
     } catch (e) { /* analytics must never break the widget */ }
   }
 
@@ -2039,6 +2125,16 @@
     shackle.setAttribute('d', 'M8 11V8a4 4 0 0 1 8 0v3');
     svg.appendChild(body);
     svg.appendChild(shackle);
+    return svg;
+  }
+
+  function closeIcon() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    [['viewBox', '0 0 24 24'], ['width', '16'], ['height', '16'], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'll-x']].forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    var path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', 'M6 6l12 12M18 6L6 18');
+    svg.appendChild(path);
     return svg;
   }
 
@@ -2101,7 +2197,8 @@
 
   function buildPanel() {
     S.titleEl = el('h2', { 'class': 'll-title', id: 'll-title' });
-    S.closeBtn = el('button', { type: 'button', 'class': 'll-close', on: { click: close } }, ['×']);
+    // An SVG cross, not the × character: the heading font draws × below the middle of the circle.
+    S.closeBtn = el('button', { type: 'button', 'class': 'll-close', on: { click: close } }, [closeIcon()]);
     S.privacyText = el('span');
     S.privacy = el('p', { 'class': 'll-privacy' }, [lockIcon(), S.privacyText]);
     S.offer = el('div', { 'class': 'll-offer', hidden: true, 'aria-live': 'polite' });
@@ -2111,11 +2208,19 @@
     S.sendBtn = el('button', { type: 'button', 'class': 'll-send ll-cta', disabled: true, on: { click: function () { submit(); } } });
     // No <form>: analytics tools that count form starts and submits ignore the widget.
     var composer = el('div', { 'class': 'll-composer' }, [S.inputLabel, S.input, S.sendBtn]);
+    S.composer = composer;
+    // "More below": the first result card can fill the view, so say when the list goes on.
+    S.downText = el('span');
+    S.down = el('button', { type: 'button', 'class': 'll-down', hidden: true, tabindex: '-1', on: { click: function () {
+      S.log.scrollBy({ top: Math.round(S.log.clientHeight * 0.8), behavior: 'smooth' });
+    } } }, [S.downText, el('span', { 'aria-hidden': 'true', text: ' ↓' })]);
     S.panel = el('div', { id: 'll-panel', 'class': 'll-panel', role: 'dialog', 'aria-labelledby': 'll-title', hidden: true }, [
       el('div', { 'class': 'll-head' }, [S.titleEl, S.closeBtn]),
-      S.privacy, S.offer, S.log, composer,
+      S.privacy, S.offer, S.log, composer, S.down,
     ]);
     S.root.appendChild(S.panel);
+    S.log.addEventListener('scroll', syncDown, { passive: true });
+    if (typeof MutationObserver !== 'undefined') new MutationObserver(function () { requestAnimationFrame(syncDown); }).observe(S.log, { childList: true, subtree: true });
     // A rotation or resize changes line breaks: measure the descriptions again.
     var lastWidth = 0;
     var refit = function () {
@@ -2132,7 +2237,7 @@
       });
       fitDescs(S.log);
     };
-    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(refit).observe(S.log);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(function () { refit(); syncDown(); }).observe(S.log);
     else window.addEventListener('resize', refit);
     applyLabels();
     renderLog();
@@ -2140,6 +2245,15 @@
 
   // Static labels. "data-l" is a one-character code (1 English, 2 Chinese) so
   // a session recording cannot read the language from an attribute.
+  function syncDown() {
+    if (!S.down || !S.log) return;
+    var left = S.log.scrollHeight - S.log.scrollTop - S.log.clientHeight;
+    var show = left > 40 && !!S.log.querySelector('.ll-card');
+    S.down.hidden = !show;
+    S.panel.classList.toggle('ll-has-below', show);
+    if (show && S.composer) S.down.style.bottom = (S.composer.offsetHeight + 10) + 'px';
+  }
+
   function applyLabels(lang) {
     lang = lang || uiLang();
     var L = t(lang);
@@ -2147,6 +2261,7 @@
     S.panel.setAttribute('data-l', lang === 'zh' ? '2' : '1');
     S.titleEl.textContent = L.title;
     S.closeBtn.setAttribute('aria-label', L.close);
+    S.downText.textContent = L.below;
     S.privacyText.textContent = L.privacy;
     S.input.placeholder = L.placeholder;
     S.inputLabel.textContent = L.inputLabel;
@@ -2413,7 +2528,10 @@
       S.busy = false; onInput();
       var turn = { who: 'bot', res: res, text: text };
       // The lesson plan is built once per answer, so a redraw shows the same plan.
-      if (res.kind === 'picks') { turn.plan = buildPlan(res, S.cat); track('ll_plan_shown'); }
+      if (res.kind === 'picks') { turn.plan = buildPlan(res, S.cat, { canOpen: canOpenNow }); track('ll_plan_shown'); }
+      if (!(follow && follow.followUp)) trackSearch(res);
+      // A count only, never the words: how often a teacher found nothing (owner, 2026-10-18).
+      if (res.kind === 'invalid' || res.kind === 'none' || (res.kind === 'ask' && res.noMore && !res.choices.length)) track('ll_no_match');
       S.turns.push(turn);
       if ((res.kind === 'picks' || res.kind === 'ask') && !(follow && follow.followUp)) S.lastQuery = text;
       S.pending = pendingFrom(res, text, S.lang);
@@ -2460,7 +2578,8 @@
       }
       if (pend.choices.length) box.appendChild(choiceChips(pend, isLast));
     } else if (res.kind === 'picks' || res.kind === 'plan') {
-      box.appendChild(renderPlan(turn.plan || (turn.plan = buildPlan(res, S.cat)), res.kind === 'plan', res.source === 'ai'));
+      S.prText = turn.text || '';
+      box.appendChild(renderPlan(turn.plan || (turn.plan = buildPlan(res, S.cat, { canOpen: canOpenNow })), res.kind === 'plan', res.source === 'ai'));
       if (res.narrow && res.source === 'rules' && isLast) {
         box.appendChild(el('p', { 'class': 'll-small', text: L.askAge }));
         box.appendChild(choiceChips({ type: 'age', text: turn.text, choices: [0, 1, 2, 3, 4] }, true));
@@ -2472,6 +2591,7 @@
       box.appendChild(el('button', { type: 'button', 'class': 'll-chip', text: L.retry, on: { click: retryCatalogue } }));
     } else {
       box.appendChild(el('p', { text: L.noMatch }));
+      box.appendChild(tellUs(turn.text));
     }
     return box;
   }
@@ -2508,7 +2628,7 @@
     track('ll_game_click');
     var host = null;
     try { host = document.querySelector('a.card[data-title="' + cssString(g.title) + '"]'); } catch (e) { host = null; }
-    if (host) { host.click(); return; }
+    if (host) { clickHost(host); return; }
     if (g.pub) {
       try { window.open(location.origin + g.path, '_blank', 'noopener'); } catch (e) { /* popup blocked */ }
     } else {
@@ -2516,9 +2636,53 @@
     }
   }
 
+  // The library's own card decides first (a locked card shows the plan pop-up).
+  // When nothing on the page stops the click, the game opens in a new tab, so the
+  // teacher's search results stay where they were.
+  function clickHost(host, url) {
+    var href = url || host.href;
+    var go = function (e) {
+      if (e.target !== host || e.defaultPrevented) return;
+      e.preventDefault();
+      try { window.open(href, '_blank', 'noopener'); } catch (err) { /* popup blocked */ }
+    };
+    window.addEventListener('click', go);
+    try { host.click(); } finally { window.removeEventListener('click', go); }
+  }
+
   function cssString(v) { return String(v).replace(/["\\]/g, '\\$&').replace(/\n/g, ' '); }
 
+  // Which plans this visitor can open now (2026-10-18). Public site: free
+  // games only. Paid site (app.*): the ll_tier cookie the Worker sets; no
+  // cookie there means a Parent member. Display only: the Worker still guards
+  // every game.
+  function canOpenNow(tier) {
+    if (tier === 'free') return true;
+    var host = (typeof location !== 'undefined' && location.hostname) || '';
+    if (!/^app\./.test(host)) return false;
+    var m = String((typeof document !== 'undefined' && document.cookie) || '').match(/(?:^|;\s*)ll_tier=([^;]*)/);
+    var t = m ? m[1] : 'parent';
+    return t === 'teacher' || (t === 'parent' && tier === 'parent');
+  }
   var TIER_CODE = { free: '1', parent: '2', teacher: '3' };
+  // The library's own plan icons (#ico-free, #ico-parent, #ico-teacher), drawn
+  // inline so they also show on pages that do not carry the library's symbols.
+  var TIER_ICON = {
+    free: ['M6 13.5h20v12a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 6 25.5Z', 'M4 8.5h24v5H4Z', 'M16 8.5V28', 'M16 8.5C16 5.5 13.5 3.5 11 4.5s-2 4 5 4Z', 'M16 8.5c0-3 2.5-5 5-4s2 4-5 4Z'],
+    parent: ['M16 27S4.5 20 4.5 12.5A6.5 6.5 0 0 1 16 8.6a6.5 6.5 0 0 1 11.5 3.9C27.5 20 16 27 16 27Z'],
+    teacher: ['M16 5 30 12 16 19 2 12Z', 'M8 15.2V22c0 2.2 3.6 4 8 4s8-1.8 8-4v-6.8', 'M28 13v7'],
+  };
+  function tierIcon(tier) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    [['viewBox', '0 0 32 32'], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', 'll-tier-ico']].forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    (TIER_ICON[tier] || TIER_ICON.parent).forEach(function (d) {
+      var p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      svg.appendChild(p);
+    });
+    return svg;
+  }
 
   // The plan label is the only coloured pill. Skill, mode, level and
   // kid-themed follow as one plain line: "Speaking · Teacher-led · Level A2".
@@ -2528,14 +2692,15 @@
     if (lt) parts.push(fmt(L.level, { l: lt }));
     if (it.kid) parts.push(L.kid);
     return el('div', { 'class': 'll-meta' }, [
-      el('span', { 'class': 'll-tier', 'data-t': TIER_CODE[g.tier] || '2', text: L.tier[g.tier] || '' }),
+      el('span', { 'class': 'll-tier', 'data-t': TIER_CODE[g.tier] || '2' }, [tierIcon(g.tier), L.tier[g.tier] || '']),
       el('span', { text: parts.filter(Boolean).join(' · ') }),
     ]);
   }
 
   // Paid cards only: say that a click opens the plan details, so the site's
   // plan pop-up is no surprise.
-  function planNote(g, L) { return g.tier === 'free' ? null : el('p', { 'class': 'll-small ll-plan', text: L.planNote }); }
+  // A game this visitor can open now needs no note (a member on the paid site).
+  function planNote(g, L) { return canOpenNow(g.tier) ? null : el('p', { 'class': 'll-small ll-plan', text: L.planNote }); }
 
   function levelText(g) {
     var r = levelRange(g);
@@ -2569,6 +2734,9 @@
     var L = t(), lang = uiLang();
     var wrap = el('div', { 'class': 'll-pl' });
     wrap.appendChild(el('h3', { 'class': 'll-pl-h', text: saved ? L.planSaved : L.planTitle }));
+    // How many games in all (plan and "other games"), so the teacher knows the list goes on.
+    var nGames = planGameCount(plan);
+    if (nGames) wrap.appendChild(el('p', { 'class': 'll-pl-n', text: nGames === 1 ? L.found1 : fmt(L.found, { n: nGames }) }));
     planSummary(plan, S.cat, lang).forEach(function (line) { wrap.appendChild(el('p', { 'class': 'll-small ll-pl-s', text: line })); });
     var noted = false;
     // 6A: the kid-themed note is a small line right before the first kid-themed step.
@@ -2593,6 +2761,7 @@
     // AI mode: the note sits under the games it is about (16px below the card's shadow).
     if (ai) wrap.appendChild(el('p', { 'class': 'll-small ll-foot', text: L.modeAI }));
     wrap.appendChild(el('p', { 'class': 'll-small ll-pl-a', text: L.adjust }));
+    wrap.appendChild(tellUs(S.prText));
     if (plan.others.length) {
       wrap.appendChild(el('p', { 'class': 'll-pl-o', text: L.others }));
       var more = el('ol', { 'class': 'll-cards' });
@@ -2601,6 +2770,13 @@
     }
     wrap.appendChild(sendBlock(plan));
     return wrap;
+  }
+
+  function planGameCount(plan) {
+    var items = (plan.kind === 'single' ? [plan.item] : plan.steps.map(function (st) { return st.item; })).concat(plan.others || []);
+    var seen = {};
+    items.forEach(function (it) { if (it) itemIds(it).forEach(function (id) { seen[id] = true; }); });
+    return Object.keys(seen).length;
   }
 
   // ---------- Feature 2: send the plan to a laptop ----------
@@ -2617,7 +2793,7 @@
   function sendBlock(plan) {
     var L = t(), panel = null;
     var box = el('div', { 'class': 'll-sh' });
-    var btn = el('button', { type: 'button', 'class': 'll-btn ll-sh-b', 'aria-expanded': 'false', text: L.sendBtn, on: { click: function () {
+    var btn = el('button', { type: 'button', 'class': 'll-btn ll-sh-b', 'aria-expanded': 'false', on: { click: function () {
       if (panel && !panel.hidden) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
       track('ll_plan_send_open');
       btn.setAttribute('aria-expanded', 'true');
@@ -2629,8 +2805,35 @@
       // The host may fill its form a moment later: show it whole then too.
       setTimeout(function () { if (!panel.hidden) reveal(panel); }, 120);
     } } });
+    btn.appendChild(el('span', { text: L.sendBtn }));
+    btn.appendChild(shIcon('chev', 'll-sh-cv'));
     box.appendChild(btn);
     return box;
+  }
+
+  // Line icons for "Send this plan" (2026-10-19): 24 grid, 2px ink stroke, round ends.
+  var SH_ICON = {
+    mail: ['M3.5 6.5h17v11h-17z', 'M3.5 7l8.5 6.5L20.5 7'],
+    link: ['M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2', 'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2'],
+    share: ['M12 15V4', 'M8 8l4-4 4 4', 'M5 12v7.5h14V12'],
+    check: ['M5 12.5l4.5 4.5L19 7.5'],
+    chev: ['M6.5 9.5l5.5 5.5 5.5-5.5']
+  };
+  function shIcon(name, cls) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    [['viewBox', '0 0 24 24'], ['aria-hidden', 'true'], ['focusable', 'false'], ['class', cls || 'll-sh-i']].forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+    SH_ICON[name].forEach(function (d) { var p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); svg.appendChild(p); });
+    return svg;
+  }
+  // One option of "Send this plan": a full-width row with an icon, a title and
+  // one line saying what happens. Rows, not pills, so they read as choices.
+  function shOption(icon, title, hint, onClick) {
+    var t1 = el('span', { 'class': 'll-sh-t', 'aria-live': 'polite', text: title });
+    var b = el('button', { type: 'button', 'class': 'll-sh-o', on: { click: function () { onClick(b, t1); } } },
+      [el('span', { 'class': 'll-sh-ic' }, [shIcon(icon)]), el('span', { 'class': 'll-sh-tx' }, [t1, el('span', { 'class': 'll-sh-h', text: hint })])]);
+    b._icon = b.firstChild;
+    return b;
   }
 
   // Scroll the conversation so the element is in view, its top first (#16).
@@ -2675,17 +2878,18 @@
     // No host form: the teacher's own mail app, the clipboard, or the share sheet.
     var row = el('div', { 'class': 'll-sh-r' });
     // A button, not a mailto link: no address sits in the page for session recorders.
-    row.appendChild(el('button', { type: 'button', 'class': 'll-btn', text: L.sendEmail, on: { click: function () {
+    row.appendChild(shOption('mail', L.sendEmail, L.sendEmailHint, function () {
       track('ll_plan_send_email');
       location.href = mailtoLink(S.cat, plan, url, lang);
-    } } }));
-    var copyBtn = el('button', { type: 'button', 'class': 'll-btn', 'aria-live': 'polite', text: L.sendCopy, on: { click: function () { copyLink(url, copyBtn, L.sendCopy); } } });
-    row.appendChild(copyBtn);
+    }));
+    row.appendChild(shOption('link', L.sendCopy, L.sendCopyHint, function (b, title) {
+      copyLink(url, title, L.sendCopy, b);
+    }));
     if (typeof navigator.share === 'function' && isPhone()) {
-      row.appendChild(el('button', { type: 'button', 'class': 'll-btn', text: L.sendShare, on: { click: function () {
+      row.appendChild(shOption('share', L.sendShare, L.sendShareHint, function () {
         track('ll_plan_send_share');
         try { navigator.share({ title: L.mailSubject, url: url }).catch(function () { /* closed */ }); } catch (e) { /* not allowed */ }
-      } } }));
+      }));
     }
     panel.appendChild(row);
     panel.appendChild(el('p', { 'class': 'll-small ll-sh-n', text: L.sendMailNote }));
@@ -2693,11 +2897,16 @@
   }
 
   // Copies the link, then the button says "Copied" for 2 seconds.
-  function copyLink(url, btn, label) {
+  // row: the option row, when the label sits inside one; its icon becomes a tick.
+  function copyLink(url, btn, label, row) {
     track('ll_plan_send_copy');
     var ok = function () {
       btn.textContent = t().sendCopied;
-      setTimeout(function () { btn.textContent = label; }, 2000);
+      if (row && row._icon) { row.classList.add('ll-sh-ok'); row._icon.replaceChildren(shIcon('check')); }
+      setTimeout(function () {
+        btn.textContent = label;
+        if (row && row._icon) { row.classList.remove('ll-sh-ok'); row._icon.replaceChildren(shIcon('link')); }
+      }, 2000);
     };
     var fallback = function () {
       var ta = el('textarea', { 'class': 'll-sr', readonly: true });
@@ -2706,7 +2915,7 @@
       ta.select();
       try { if (document.execCommand('copy')) ok(); } catch (e) { /* not allowed */ }
       ta.remove();
-      btn.focus();
+      (row || btn).focus();
     };
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok, fallback);
@@ -2727,6 +2936,103 @@
 
   // Everything shown here comes from the catalogue, never from the model.
   // opts.step: the step label ("Warm-up · 5 min"); opts.parts: a single-game plan's parts.
+  // ---------- Modes inside a game (owner, 2026-10-18) ----------
+  // "Teachers know what they want to practise but cannot find it: often we have
+  // it, they just don't know." catalogue.compact.json carries each game's modes
+  // (pr: m mode, s set, q deep-link query, k search words), exported from the site.
+  // Ranking never changes: on a card that is already picked, the mode that best
+  // matches the teacher's words is shown as "Start with: Guess it · Question words",
+  // and it opens the game straight on that mode.
+  var PR_STOP = toSet(('a an the and or of to in on at for with my our your is are be it this that i me we they them ' +
+    'student students pupil pupils kid kids child children class lesson lessons game games practice practise practising ' +
+    'english want wants help need needs age aged year years old level min mins minute minutes ' +
+    'teach teaching teacher tutor learn learning please good best fun').split(' '));
+  // Everyday words that are themselves the grammar point of a mode (Determiner Studio).
+  var PR_KEEP = toSet('some any much many few little less fewer more lot'.split(' '));
+  function practiceFor(g, text) { var m = practiceMatch(g, text); return m && m.score >= 2 ? m.r : null; }
+  // The best mode of one game for these words: { r, score, n (distinct words that hit) }.
+  function practiceMatch(g, text) {
+    if (!g.pr || !g.pr.length || !text) return null;
+    var raw = String(text).toLowerCase();
+    var title = toSet(tokens(g.title).map(norm));
+    var words = uniq(tokens(raw).map(norm)).filter(function (w) { return !PR_STOP[w] && !title[w]; });
+    var best = null, bestScore = 0, bestN = 0;
+    g.pr.forEach(function (r) {
+      // The mode's own name counts most, then the set, then the search words.
+      var modeWords = toSet(tokens(r.m).map(norm)), setWords = toSet(tokens(r.s).map(norm));
+      var hayWords = toSet(tokens(String(r.k || '')).map(norm)), sc = 0, n = 0;
+      words.forEach(function (w) {
+        var p = modeWords[w] ? 3 : setWords[w] ? 2 : hayWords[w] ? 1 : 0;
+        // A number only counts in a set name ("Type 2"), never as a search word ("age 9").
+        if (/^\d+$/.test(w) && p !== 2) p = 0;
+        // n counts the words that really point at a mode: a mode or set word, or a
+        // longer search word. "do" or "how" alone in the search words does not.
+        if (p) { sc += p; if (p === 3 || ((!STOP[w] || PR_KEEP[w]) && (p === 2 || w.length >= 4))) n++; }
+      });
+      String(r.k || '').split(/\s+/).forEach(function (k) { if (k.length >= 2 && CJK.test(k) && raw.indexOf(k) >= 0) { sc += 2; n++; } });
+      // A tie goes to the row that names a set ("Fill it · Type 2" over "Which if?").
+      if (sc > bestScore || (sc === bestScore && sc > 0 && r.s && best && !best.s)) { best = r; bestScore = sc; bestN = n; }
+    });
+    return best ? { r: best, score: bestScore, n: bestN } : null;
+  }
+  // When no game's own keywords match, a strong match on a mode inside a game
+  // still finds it: "adverbs of frequency" → Tense Studio (Frequency Chart),
+  // "a few a little a lot of" → Determiner Studio. Two different words must hit
+  // and score 4 or more, so one stray word ("fix my car") never picks a game.
+  function modeMatches(ctx, text) {
+    var out = [];
+    ctx.eligible.forEach(function (g) {
+      var m = practiceMatch(g, text);
+      if (m && m.n >= 2 && m.score >= 4) out.push({ id: g.id, s: m.score });
+    });
+    return out.sort(function (a, b) { return b.s - a.s; }).slice(0, 3);
+  }
+  function practiceLine(g, L) {
+    var r = practiceFor(g, S.prText);
+    if (!r) return null;
+    track('ll_practice_shown');
+    return el('p', { 'class': 'll-pr' }, [
+      el('strong', { text: L.startWith + ' ' }),
+      el('button', { type: 'button', 'class': 'll-pr-b', on: { click: function () { openPractice(g, r); } } },
+        [r.m + (r.s ? ' · ' + r.s : ''), el('span', { 'class': 'll-ext', 'aria-hidden': 'true', text: ' ↗' })]),
+    ]);
+  }
+  // Same rule as openGame: on the library page the library's own card decides
+  // (a locked card shows the plan pop-up); an open card's address gets the mode.
+  function openPractice(g, r) {
+    track('ll_practice_click');
+    var host = null;
+    try { host = document.querySelector('a.card[data-title="' + cssString(g.title) + '"]'); } catch (e) { host = null; }
+    if (host) {
+      if (host.classList.contains('is-locked')) { host.click(); return; }
+      var u = new URL(host.getAttribute('href'), location.href);
+      try { window.open(location.origin + u.pathname + r.q, '_blank', 'noopener'); } catch (e) { /* popup blocked */ }
+      return;
+    }
+    if (g.pub) {
+      try { window.open(location.origin + g.path + r.q, '_blank', 'noopener'); } catch (e) { /* popup blocked */ }
+    } else {
+      location.assign(location.origin + '/library');
+    }
+  }
+  // Opt-in only: opens the teacher's own email app with their words filled in.
+  // Nothing is sent unless they press Send there, so "nothing you type leaves
+  // your device" still holds for the widget itself.
+  // A button, not a mailto link (same as "Send this plan"): the typed words never
+  // sit in the page where a session recorder could read them.
+  function tellUs(text) {
+    var L = t();
+    return el('p', { 'class': 'll-small ll-tell' }, [
+      el('button', { type: 'button', 'class': 'll-more', on: { click: function () {
+        track('ll_tell_us');
+        // The site's own address, from the page it runs on (no site name in this file).
+        var site = location.hostname.replace(/^(?:www|app)\./, '');
+        location.href = 'mailto:hello@' + site + '?subject=' + encodeURIComponent(L.tellUsSubject) +
+          '&body=' + encodeURIComponent(L.tellUsBody + ' ' + String(text || '') + '\n');
+      } } }, [L.tellUs]),
+    ]);
+  }
+
   function card(it, opts) {
     opts = opts || {};
     var L = t(), zh = S.lang === 'zh', byId = S.cat.byId;
@@ -2763,6 +3069,7 @@
       meta(g, it, L, levelText(g)),
       planNote(g, L),
       el('p', { 'class': 'll-desc', text: zh ? g.desc_zh : g.desc_en }),
+      practiceLine(g, L),
       how ? el('p', { 'class': 'll-how' }, [el('strong', { text: L.how + ' ' }), how]) : null,
       parts,
     ]);
