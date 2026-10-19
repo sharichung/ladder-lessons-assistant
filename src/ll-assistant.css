@@ -228,7 +228,8 @@
 #ll-assistant .ll-tier-ico { width: 13px; height: 13px; flex: 0 0 13px; margin-right: 4px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 #ll-assistant .ll-tier[data-t="1"] { background: var(--ll-tier-free); border-color: var(--ll-ink); }
 #ll-assistant .ll-tier[data-t="2"] { background: var(--ll-yellow); }
-#ll-assistant .ll-tier[data-t="3"] { background: var(--ll-purple-1); border-color: var(--ll-purple-1); }
+/* Ink border like Free and Parent (owner, 2026-10-19: the purple border made Teacher look borderless) */
+#ll-assistant .ll-tier[data-t="3"] { background: var(--ll-purple-1); border-color: var(--ll-ink); }
 #ll-assistant .ll-card p.ll-plan { margin: -2px 0 6px; font-size: 12px; }
 /* Description: three lines, then "more" (C7). No ellipsis. */
 #ll-assistant .ll-desc { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ll-ink-soft); max-height: calc(1.45em * 3); overflow: hidden; }
@@ -282,7 +283,10 @@
 
 /* Send to laptop (Feature 2): a white-pill button; the options open under it (ll-sh, see above) */
 #ll-assistant .ll-sh { margin-top: 16px; }
-#ll-assistant .ll-sh-b { width: 100%; }
+/* Send this plan: an ink pill, so it reads as the plan's closing action (owner, 2026-10-19).
+   Ink, not yellow: yellow is already "More below" and the Parent label. */
+#ll-assistant .ll-sh-b { width: 100%; background: var(--ll-ink); color: #fff; }
+#ll-assistant .ll-sh-b[aria-expanded="true"] { background: #fff; color: var(--ll-ink); }
 #ll-assistant .ll-sh-p { margin-top: 10px; padding: 12px; border-radius: var(--ll-r-rung); background: #fff; box-shadow: var(--ll-sh-card); }
 #ll-assistant .ll-sh-r { display: flex; flex-wrap: wrap; gap: 8px; }
 #ll-assistant .ll-sh-r .ll-btn { flex: 1 1 auto; padding: 8px 14px; font-size: 14px; }

@@ -1027,7 +1027,8 @@ test('plan label CSS copies the library page .tier rules', () => {
   assert.match(css, /\.ll-tier \{[^}]*font-weight: 600; font-size: 11px; letter-spacing: \.04em;[^}]*padding: 3px 10px;[^}]*border: 2px solid var\(--ll-ink\); color: var\(--ll-ink\)/);
   assert.match(css, /\.ll-tier\[data-t="1"\] \{ background: var\(--ll-tier-free\)/);
   assert.match(css, /\.ll-tier\[data-t="2"\] \{ background: var\(--ll-yellow\)/);
-  assert.match(css, /\.ll-tier\[data-t="3"\] \{ background: var\(--ll-purple-1\); border-color: var\(--ll-purple-1\)/);
+  // 2026-10-19: Teacher gets the ink border like Free and Parent (library .tier.teacher changed with it)
+  assert.match(css, /\.ll-tier\[data-t="3"\] \{ background: var\(--ll-purple-1\); border-color: var\(--ll-ink\)/);
   assert.match(css, /\.ll-cta \{[^}]*min-height: 44px;[^}]*font-weight: 700; font-size: 16px;[^}]*border: 3px solid var\(--ll-ink\);[^}]*background: var\(--ll-grad-cta\); color: var\(--ll-ink\)/);
   // B5: disabled as on the site
   assert.match(css, /\.ll-cta:disabled \{ background: var\(--ll-line\); color: var\(--ll-ink-soft\); border-color: var\(--ll-muted\); box-shadow: none;/);
