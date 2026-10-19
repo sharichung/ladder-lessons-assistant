@@ -424,7 +424,7 @@ test('plan summary counts from the catalogue, in English and Chinese', () => {
   assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run step 1 today, free.', '2 of 3 steps are in the Teacher plan.']);
   assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['第 1 步今日就玩得，免費。', '3 步入面有 2 步喺老師版。']);
   plan = core.buildPlan(fakeAnswer([p1, p2, FREE0], [9, 5, 7], null), cat);
-  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run step 1 today, free.', '2 of 3 steps are in the Parent plan.']);
+  assert.deepEqual(core.planSummary(plan, cat, 'en'), ['You can run step 1 today, free.', '2 of 3 steps are in the Parent and Teacher plans.']);
   plan = core.buildPlan(fakeAnswer([p1, t1], [5, 9], null), cat);
   assert.deepEqual(core.planSummary(plan, cat, 'en'), ['Both steps are in the Teacher plan.']);
   assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['2 步全部喺老師版。']);
@@ -435,7 +435,7 @@ test('plan summary counts from the catalogue, in English and Chinese', () => {
   assert.deepEqual(core.planSummary(plan, cat, 'zh'), ['第 1、2 步今日就玩得，免費。']);
   // One paid step of three.
   plan = core.buildPlan(fakeAnswer([frees[0], p1, frees[1]], [9, 5, 7], null), cat);
-  assert.equal(core.planSummary(plan, cat, 'en')[1], '1 of 3 steps is in the Parent plan.');
+  assert.equal(core.planSummary(plan, cat, 'en')[1], '1 of 3 steps is in the Parent and Teacher plans.');
   // Single-game plans.
   plan = core.buildPlan(fakeAnswer(['speaking_LadderTalk'], [9], null), cat);
   assert.deepEqual(core.planSummary(plan, cat, 'en'), ['This game is in the Teacher plan.']);
@@ -974,8 +974,8 @@ test('privacy lines and plan labels are exactly as approved', () => {
   assert.equal(core.T.zh.placeholder, '年齡、程度、技能');
   assert.equal(core.T.en.inputLabel, 'Describe your student');
   assert.equal(core.T.zh.inputLabel, '描述你嘅學生');
-  assert.deepEqual(core.T.en.tier, { free: 'Free', parent: 'Parent', teacher: 'Teacher' });
-  assert.deepEqual(core.T.zh.tier, { free: '免費', parent: '家長版', teacher: '老師版' });
+  assert.deepEqual(core.T.en.tier, { free: 'Free', parent: 'Parent + Teacher', teacher: 'Teacher' });
+  assert.deepEqual(core.T.zh.tier, { free: '免費', parent: '家長版＋老師版', teacher: '老師版' });
 });
 
 test('skill choice labels use the site\'s skill tag words (口說, not 口語)', () => {
@@ -1101,4 +1101,25 @@ test('practices: a strong mode match finds a game the keywords miss; one stray w
   for (const off of ['how do I fix my car', 'how do i cook rice', 'what time is it', 'how much is it', 'I want to warm up at the gym', 'should i buy a car']) {
     assert.notEqual(core.recommendRules(cat, off).kind, 'picks', off);
   }
+});
+
+// 2026-10-19 (owner's decision A): a visitor who cannot open Main gets a game
+// they can open as Main, when it matches the topic and scores at least 60%.
+test('lesson plan: Main is a game the visitor can open now (canOpen)', () => {
+  const ids = (x) => (Array.isArray(x) ? x : (x.ids || [x.id]));
+  const mainId = (p) => (p.kind === 'single' ? ids(p.item)[0] : ids(p.steps.filter((s) => s.role === 'main' || s.role === null)[0].item || p.steps[0].ids)[0]);
+  const freeOnly = (t) => t === 'free';
+  const all = () => true;
+  const r1 = core.recommendRules(cat, 'Age 7, beginner, phonics, 30 min');
+  assert.equal(mainId(core.buildPlan(r1, cat, { canOpen: freeOnly })), 'phonics_LadderPhonics');
+  assert.equal(mainId(core.buildPlan(r1, cat, { canOpen: all })), mainId(core.buildPlan(r1, cat)), 'members: Main as before');
+  const r2 = core.recommendRules(cat, 'Adult, B2, IELTS speaking, 60 min');
+  const p2 = core.buildPlan(r2, cat, { canOpen: freeOnly });
+  assert.equal(mainId(p2), 'speaking_QuickFireFlashcards');
+  assert.equal(p2.steps.length, 1, 'a swapped game with no parts is the lesson on its own');
+  assert.ok(p2.others.map((o) => ids(o)[0]).includes('speaking_IeltsSpeakingRoom'), 'the better locked game is under Other games that fit');
+  const r3 = core.recommendRules(cat, 'kids 10 past tense 45 min');
+  assert.equal(mainId(core.buildPlan(r3, cat, { canOpen: freeOnly })), mainId(core.buildPlan(r3, cat)), 'no free game fits: unchanged');
+  const r4 = core.recommendRules(cat, 'Halloween speaking');
+  assert.equal(mainId(core.buildPlan(r4, cat, { canOpen: freeOnly })), mainId(core.buildPlan(r4, cat)), 'a festival keeps the festival rules');
 });

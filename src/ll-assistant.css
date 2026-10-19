@@ -283,14 +283,31 @@
 
 /* Send to laptop (Feature 2): a white-pill button; the options open under it (ll-sh, see above) */
 #ll-assistant .ll-sh { margin-top: 16px; }
+/* The trigger is a disclosure: a chevron that turns when the options are open. */
 /* Send this plan: an ink pill, so it reads as the plan's closing action (owner, 2026-10-19).
-   Ink, not yellow: yellow is already "More below" and the Parent label. */
-#ll-assistant .ll-sh-b { width: 100%; background: var(--ll-ink); color: #fff; }
+   Ink, not yellow: yellow is already "More below" and the Parent label. Open: white, so the options lead. */
+#ll-assistant .ll-sh-b { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--ll-ink); color: #fff; }
 #ll-assistant .ll-sh-b[aria-expanded="true"] { background: #fff; color: var(--ll-ink); }
-#ll-assistant .ll-sh-p { margin-top: 10px; padding: 12px; border-radius: var(--ll-r-rung); background: #fff; box-shadow: var(--ll-sh-card); }
-#ll-assistant .ll-sh-r { display: flex; flex-wrap: wrap; gap: 8px; }
-#ll-assistant .ll-sh-r .ll-btn { flex: 1 1 auto; padding: 8px 14px; font-size: 14px; }
-#ll-assistant .ll-sh-p p.ll-sh-n { margin: 8px 0 0; }
+#ll-assistant .ll-sh-cv { width: 18px; height: 18px; flex: 0 0 18px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
+#ll-assistant .ll-sh-b[aria-expanded="true"] .ll-sh-cv { transform: rotate(180deg); }
+/* 2026-10-19: the options are rows (icon, title, one line of what happens), not pills,
+   so they read as choices and never look like the trigger above them. */
+#ll-assistant .ll-sh-p { margin-top: 10px; }
+#ll-assistant .ll-sh-r { display: grid; gap: 8px; }
+#ll-assistant .ll-sh-o {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 14px;
+  border: 2px solid var(--ll-ink); border-radius: var(--ll-r-rung); background: #fff; color: var(--ll-ink);
+  font: inherit; text-align: left; cursor: pointer; transition: background .15s ease, transform .15s ease;
+}
+#ll-assistant .ll-sh-o:hover { background: var(--ll-cream); }
+#ll-assistant .ll-sh-o:active { transform: translateY(1px); }
+#ll-assistant .ll-sh-ic { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%; background: var(--ll-cream); border: 2px solid var(--ll-ink); }
+#ll-assistant .ll-sh-i { width: 20px; height: 20px; fill: none; stroke: var(--ll-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#ll-assistant .ll-sh-ok .ll-sh-ic { background: var(--ll-teal-pale); }
+#ll-assistant .ll-sh-tx { display: flex; flex-direction: column; min-width: 0; }
+#ll-assistant .ll-sh-t { font-family: var(--ll-ff-head); font-size: 15px; font-weight: 600; line-height: 1.3; }
+#ll-assistant .ll-sh-h { font-size: 13px; line-height: 1.35; color: var(--ll-ink-soft); }
+#ll-assistant .ll-sh-p p.ll-sh-n { margin: 8px 2px 0; }
 #ll-assistant .ll-sh-p p.ll-sh-d { margin: 8px 0 0; font-size: 13.5px; font-weight: 700; color: var(--ll-ink); }
 #ll-assistant .ll-sh-p p.ll-sh-d:empty, #ll-assistant .ll-sh-m:empty { display: none; }
 #ll-assistant .ll-sh-p .ll-link { display: inline-block; margin-top: 6px; }

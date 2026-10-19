@@ -153,7 +153,7 @@ const calls = (page) => page.evaluate(() => ({ gtag: window.__events, clarity: w
 const eventNames = async (page) => (await calls(page)).gtag.map((a) => a[1]);
 
 const rgb = (hex) => { const h = hex.replace('#', ''); return `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)})`; };
-const TIER_LABEL = { en: { free: 'Free', parent: 'Parent', teacher: 'Teacher' }, zh: { free: '免費', parent: '家長版', teacher: '老師版' } };
+const TIER_LABEL = { en: { free: 'Free', parent: 'Parent + Teacher', teacher: 'Teacher' }, zh: { free: '免費', parent: '家長版＋老師版', teacher: '老師版' } };
 const TIER_BG = { free: rgb(TOKENS['tier-free']), parent: rgb(TOKENS.yellow), teacher: rgb(TOKENS['purple-1']) };
 
 // Query words and Chinese pairs, for leak checks.
@@ -449,10 +449,10 @@ test('C1: one language per conversation; a switch redraws earlier answers; "2" k
   const { context, page } = await newPage();
   await openWidget(page);
   await ask(page, 'Primary 5 student vocabulary');
-  assert.equal(await page.locator('#ll-assistant .ll-card .ll-tier').first().innerText(), 'Parent');
+  assert.equal(await page.locator('#ll-assistant .ll-card .ll-tier').first().innerText(), 'Parent + Teacher');
   const r = await ask(page, '中四學生');
   assert.equal(r.turn.askType, 'skill');
-  assert.equal(await page.locator('#ll-assistant .ll-card .ll-tier').first().innerText(), '家長版', 'earlier card redrawn in Chinese');
+  assert.equal(await page.locator('#ll-assistant .ll-card .ll-tier').first().innerText(), '家長版＋老師版', 'earlier card redrawn in Chinese');
   assert.equal(await page.locator('#ll-assistant .ll-title').innerText(), '課堂遊戲小助手');
   assert.match(await lastBot(page).innerText(), /1\s*口說[\s\S]*2\s*寫作[\s\S]*6\s*聽力/);
   const r2 = await ask(page, '2');
@@ -461,7 +461,7 @@ test('C1: one language per conversation; a switch redraws earlier answers; "2" k
   assert.ok(r2.turn.ids.every((id) => cat.byId[id].skill === 'writing'), r2.turn.ids.join());
   assert.ok(!cat.byId[r2.turn.ids[0]].kid, 'Form 4: kid-themed not first');
   await ask(page, 'adult business english');
-  assert.equal(await page.locator('#ll-assistant .ll-card .ll-tier').first().innerText(), 'Parent', 'switched back to English');
+  assert.equal(await page.locator('#ll-assistant .ll-card .ll-tier').first().innerText(), 'Parent + Teacher', 'switched back to English');
   await context.close();
 });
 
@@ -1370,7 +1370,7 @@ test('Lesson plan: heading, summary, steps with minutes, parts, other games, kid
   assert.equal(await r.el.locator('.ll-pl-h').innerText(), 'Your lesson plan');
   assert.equal(await r.el.locator('.ll-pl-t').innerText(), 'Suggested timing');
   assert.deepEqual(await r.el.locator('.ll-pl-st').allInnerTexts(), ['Warm-up · 10 min', 'Main activity · 25 min', 'Wrap-up · 10 min']);
-  assert.deepEqual(await r.el.locator('.ll-pl-s').allInnerTexts(), ['All 3 steps are in the Parent plan.']);
+  assert.deepEqual(await r.el.locator('.ll-pl-s').allInnerTexts(), ['All 3 steps are in the Parent and Teacher plans.']);
   assert.equal(await r.el.locator('.ll-pl-a').innerText(), 'Every game can be stopped at any time, so adjust as you go.');
   // Each step is a full card: the whole card opens the game (paid: the library).
   assert.equal(await r.el.locator('.ll-pl .ll-card button.ll-card-title').count(), 3);
@@ -1388,7 +1388,7 @@ test('Lesson plan: heading, summary, steps with minutes, parts, other games, kid
   assert.equal(await r.el.locator('.ll-pl-pl').innerText(), '建議時間');
   assert.equal(await r.el.locator('.ll-pl-o').innerText(), '其他啱用嘅遊戲');
   assert.equal(await r.el.locator('.ll-pl-a').innerText(), '每隻遊戲都可以隨時停，時間可以自己調。');
-  assert.deepEqual(await r.el.locator('.ll-pl-s').allInnerTexts(), ['呢隻遊戲喺家長版。']);
+  assert.deepEqual(await r.el.locator('.ll-pl-s').allInnerTexts(), ['呢隻遊戲喺家長版同老師版。']);
   r = await ask(page, 'adult business english');
   assert.deepEqual(await r.el.locator('.ll-pl-pn').allInnerTexts(), ['Warm-up', 'Words', 'Discuss', 'Practice + Real Life'], '1B');
   assert.equal(await r.el.locator('.ll-pl-pl').innerText(), 'Steps');
@@ -1423,20 +1423,21 @@ test('Send this plan, no host form: email via the mail app, copy link, share on 
   await r.el.locator('.ll-sh-b').click();
   assert.equal(await r.el.locator('.ll-sh-b').innerText(), 'Send this plan to my laptop');
   assert.equal(await r.el.locator('.ll-sh-b').getAttribute('aria-expanded'), 'true');
-  assert.deepEqual(await r.el.locator('.ll-sh-r button').allInnerTexts(), ['Email it to myself', 'Copy link'], 'no Share on a desktop browser');
+  assert.deepEqual(await r.el.locator('.ll-sh-r .ll-sh-t').allInnerTexts(), ['Email it to myself', 'Copy link'], 'no Share on a desktop browser');
+  assert.deepEqual(await r.el.locator('.ll-sh-r .ll-sh-h').allInnerTexts(), ['Opens your mail app with the link filled in', 'Paste it into WhatsApp, notes or a browser'], 'each option says what happens');
   assert.equal(await r.el.locator('.ll-sh-n').innerText(), 'This uses your own mail app. Nothing is sent to Ladder Lessons.');
   // The plan stays on screen; nothing is blocked behind the panel.
   assert.equal(await r.el.locator('.ll-pl .ll-card').count(), 3);
   // Copy: the link in the clipboard, "Copied" for 2 seconds.
   await r.el.locator('.ll-sh-r button', { hasText: 'Copy link' }).click();
-  await page.waitForFunction(() => [...document.querySelectorAll('#ll-assistant .ll-sh-r button')].some((b) => b.textContent === 'Copied'));
+  await page.waitForFunction(() => [...document.querySelectorAll('#ll-assistant .ll-sh-r .ll-sh-t')].some((b) => b.textContent === 'Copied'));
   const link = await page.evaluate(() => navigator.clipboard.readText());
   assert.match(link, new RegExp('^' + BASE.replace(/[.]/g, '\\.') + '/library#llplan=m45e\\.writing_[A-Za-z]+\\.writing_[A-Za-z]+\\.writing_[A-Za-z]+$'));
   const back = core.parsePlanCode(link.split('#llplan=')[1], cat);
   assert.deepEqual(back.steps.map((st) => st.item.id), r.turn.plan.steps.map((st) => st.ids[0]));
   await page.waitForTimeout(1300);
-  assert.ok((await r.el.locator('.ll-sh-r button').allInnerTexts()).includes('Copied'), '"Copied" still shown after about 1.5 s');
-  await page.waitForFunction(() => [...document.querySelectorAll('#ll-assistant .ll-sh-r button')].map((b) => b.textContent).join() === 'Email it to myself,Copy link', null, { timeout: 2000 });
+  assert.ok((await r.el.locator('.ll-sh-r .ll-sh-t').allInnerTexts()).includes('Copied'), '"Copied" still shown after about 1.5 s');
+  await page.waitForFunction(() => [...document.querySelectorAll('#ll-assistant .ll-sh-r .ll-sh-t')].map((b) => b.textContent).join() === 'Email it to myself,Copy link', null, { timeout: 2000 });
   // Email: a button, no mailto address anywhere in the page.
   await r.el.locator('.ll-sh-r button', { hasText: 'Email it to myself' }).click();
   await page.waitForTimeout(200);
@@ -1523,7 +1524,7 @@ test('Send this plan, host form: sendPlan called once, its form first, copy line
   await page.evaluate(() => { window.LLAssistantHost = { sendPlan: () => { throw new Error('form broke'); } }; });
   const r3 = await ask(page, 'Age 9 writing 30 minutes');
   await r3.el.locator('.ll-sh-b').click();
-  assert.deepEqual(await r3.el.locator('.ll-sh-r button').allInnerTexts(), ['Email it to myself', 'Copy link']);
+  assert.deepEqual(await r3.el.locator('.ll-sh-r .ll-sh-t').allInnerTexts(), ['Email it to myself', 'Copy link']);
   assert.equal(await r3.el.locator('.ll-sh-n').innerText(), 'This uses your own mail app. Nothing is sent to Ladder Lessons.');
   assert.deepEqual(errors, []);
   await context.close();
@@ -1740,7 +1741,8 @@ test('Chinese send panel wording, both modes (spec 2.1, 2.4, 2.5, 2.9, 2.11)', a
   let r = await ask(page, '小五學生 寫故事 45分鐘');
   assert.equal(await r.el.locator('.ll-sh-b').innerText(), '將呢堂課傳去我部電腦');
   await r.el.locator('.ll-sh-b').click();
-  assert.deepEqual(await r.el.locator('.ll-sh-r button').allInnerTexts(), ['寄畀自己', '複製連結']);
+  assert.deepEqual(await r.el.locator('.ll-sh-r .ll-sh-t').allInnerTexts(), ['寄畀自己', '複製連結']);
+  assert.deepEqual(await r.el.locator('.ll-sh-r .ll-sh-h').allInnerTexts(), ['開你部機嘅 email app，連結已經填好', '貼去 WhatsApp、筆記或者瀏覽器']);
   assert.equal(await r.el.locator('.ll-sh-n').innerText(), '呢度用你自己嘅 email app，唔會有嘢傳送畀 Ladder Lessons。');
   await context.close();
   ({ context, page } = await newPage({ viewport: { width: 375, height: 667 } }));
@@ -1818,12 +1820,17 @@ test('Halloween finds Ladder Festivals in keyword mode (&llai=off) and in AI mod
     assert.equal(r.turn.ids[0], 'speaking_LadderFestivals', text);
     assert.equal(await r.el.locator('.ll-card .ll-card-title').first().innerText().then((x) => x.replace(/\s*↗\s*$/, '')), 'Ladder Festivals', `${text}: first card shown`);
   }
-  // Form 4 speaking: Ladder Talk is the lesson; Festival Speaking Builder only under "Other games that fit".
+  // Form 4 speaking: never a festival game as the lesson. On a page where the visitor can
+  // open only free games (this demo, the public site), Quick Fire is the lesson (2026-10-19)
+  // and Ladder Talk, the members' lesson, is under "Other games that fit" with Festival
+  // Speaking Builder last. Members keep Ladder Talk (unit test: canOpen).
   for (const text of ['Form 4 口說', '中四 speaking']) {
     const r = await ask(page, text);
-    assert.equal(r.turn.plan.kind, 'single', text);
-    assert.deepEqual(r.turn.plan.item, ['speaking_LadderTalk'], text);
-    assert.ok(r.turn.plan.others.some((x) => x[0] === 'speaking_FestivalSentenceBuilder'), text);
+    const steps = r.turn.plan.steps.map((st) => (st.ids || st.item)[0]);
+    assert.deepEqual(steps, ['speaking_QuickFireFlashcards'], text);
+    const others = r.turn.plan.others.map((x) => x[0]);
+    assert.ok(others.includes('speaking_LadderTalk'), text);
+    assert.equal(others[others.length - 1], 'speaking_FestivalSentenceBuilder', text);
   }
   // With a festival and a skill named, the festival game for that skill is the lesson (round 7);
   // with only a festival, the general festival game.
